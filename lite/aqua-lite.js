@@ -10,7 +10,11 @@
 //    browser scales the result up smoothly. The sheets are soft, so little is lost.
 //  - No DOM access: the same code runs on the page or inside a Worker with an OffscreenCanvas.
 //
-// createAquaLite(canvas, options) → { render(dt), resize(w, h), set(options), get(), info() }
+//  - Wind: each mesh column hangs on a soft spring. A steady wind leans the sheets, gusts ripple them,
+//    and push() shoves the columns near a point (e.g. the pointer); it all springs back.
+//
+// createAquaLite(canvas, options) → { render(dt), resize(w, h), set(options), get(), info(),
+//                                     wind(speedOrFn), push(x, y, vx, vy, radius), dispose() }
 
 export const LITE_DEFAULTS = {
 	// motion (same meaning as in the full engine)
@@ -29,6 +33,7 @@ export const LITE_DEFAULTS = {
 	columns: 72,     // mesh columns per sheet
 	rows: 12,        // mesh rows per sheet
 	blur: 1.0,       // gaussian blur radius in render pixels (0 = off)
+	windGain: 1,     // how strongly the sheets follow wind() and push()
 };
 
 const CAM_D = 3.5, TAN = 1 / CAM_D, NEAR0 = 1.2, KILL = 1.5, STRIDE = 16, SUB = 2;
@@ -209,7 +214,11 @@ export function createAquaLite(canvas, options = {}) {
 	};
 
 	// ---------- scene ----------
-	let T = 0, FT = 0, camZ = 0, roll = 0, sheets = [];
+	let T = 0, FT = 0, camZ = 0, roll = 0, sheets = [], frameDt = 0;
+	// wind: a horizontal speed in screen widths per second, or a function of the screen's height
+	// (0 top … 1 bottom) giving one; pushes are shoves this frame, at points in 0…1 screen units
+	let windField = 0;
+	const pushes = [];
 	const depthRange = () => S.depth * 6;
 	const rollSheet = (slot, gen, dist) => {
 		const r = mulberry32((S.seed * 7919 + slot * 104729 + gen * 1299709) | 0); r(); r();
@@ -233,12 +242,25 @@ export function createAquaLite(canvas, options = {}) {
 		};
 		return sh;
 	};
+	// Change how many sheets there are, keeping the ones there are where they are
+	const setCount = (n) => {
+		n = Math.max(1, Math.min(32, n | 0));
+		if (n < sheets.length) { sheets = sheets.filter((sh) => sh.slot < n); return; }
+		const R = depthRange(), r = mulberry32(S.seed * 131 + n * 7 + sheets.length);
+		const used = new Set(sheets.map((sh) => sh.slot));
+		for (let slot = 0; sheets.length < n; slot++) {
+			if (used.has(slot)) continue;
+			// new ones arrive from the depths, so nothing pops up in front of the camera
+			sheets.push(rollSheet(slot, 0, NEAR0 + R * (0.75 + r() * 0.25)));
+		}
+	};
 	const genSheets = () => {
 		const n = Math.max(1, Math.min(32, S.count | 0)), R = depthRange(), r = mulberry32(S.seed * 31 + 5);
 		sheets = [];
 		for (let i = 0; i < n; i++) sheets.push(rollSheet(i, 0, NEAR0 + R * (0.12 + ((i + 0.5 + (r() - 0.5) * 0.6) / n) * 0.78)));
 	};
 	const updateScene = (dt) => {
+		frameDt = dt;
 		T += dt * S.speed; FT += dt * S.speed * S.flow;
 		camZ -= dt * S.speed * S.dive * 3;
 		roll += dt * S.speed * S.roll * (Math.PI / 180) * 3;
@@ -337,6 +359,9 @@ export function createAquaLite(canvas, options = {}) {
 			px[i - 1] = px[i] - c * Math.cos(y) * ds; py[i - 1] = py[i] - c * Math.sin(y) * ds; pz[i - 1] = pz[i] - Math.sin(p) * ds; }
 		const R = Rm, V = VIEW, sc = F.sc, D = data;
 		let maxD = -Infinity;
+		// each column's spring: sideways displacement and speed in the view plane, in world units
+		if (!sh.wd || sh.wd.n !== nu + 1) sh.wd = { n: nu + 1, dx: new Float32Array(nu + 1), dy: new Float32Array(nu + 1), vx: new Float32Array(nu + 1), vy: new Float32Array(nu + 1) };
+		const wd = sh.wd, gain = S.windGain, live = gain > 0 && frameDt > 0, K = CAM_D;
 		for (let c = 0; c <= nu; c++) {
 			const i = c * SUB, s = (i / n - 0.5) * F.L;
 			const e = F.ev(s), f = frameAt(e.yaw, e.pit, e.th);
@@ -344,7 +369,33 @@ export function createAquaLite(canvas, options = {}) {
 			const ka = -ct * e.dyaw * cp - st * e.dpit, kn = st * e.dyaw * cp - ct * e.dpit, tau = e.dth + e.dyaw * f.tz;
 			const thw = foldTaper(ka, kn, F.hw, F.curl) * F.hw;
 			const lx = px[i] * sc, ly = py[i] * sc, lz = pz[i] * sc;
-			const Cx = F.ax + R[0] * lx + R[1] * ly + R[2] * lz, Cy = F.ay + R[3] * lx + R[4] * ly + R[5] * lz, Cz = F.az + R[6] * lx + R[7] * ly + R[8] * lz;
+			let Cx = F.ax + R[0] * lx + R[1] * ly + R[2] * lz, Cy = F.ay + R[3] * lx + R[4] * ly + R[5] * lz, Cz = F.az + R[6] * lx + R[7] * ly + R[8] * lz;
+			if (live || wd.dx[c] !== 0 || wd.dy[c] !== 0) {
+				const qx = V[0] * Cx + V[1] * Cy + V[2] * Cz, qy = V[3] * Cx + V[4] * Cy + V[5] * Cz, d = -(V[6] * Cx + V[7] * Cy + V[8] * Cz);
+				if (live && d > 0.05) {
+					// where the column is on screen (0…1, y down), and screen units → world units at its depth
+					const sx = 0.5 + (0.5 * K * qx) / (d * aspect), sy = 0.5 - (0.5 * K * qy) / d, toW = (2 * d) / K;
+					const wind = typeof windField === "function" ? windField(Math.min(1, Math.max(0, sy))) : windField;
+					let fx = 0, fy = 0;
+					// drag toward the wind's speed; a steady wind settles into a lean
+					fx += 6 * gain * wind * aspect * toW;
+					for (const p of pushes) {
+						const ex = (sx - p.x) * aspect, ey = sy - p.y, w = Math.exp(-(ex * ex + ey * ey) / (p.r * p.r));
+						if (w > 0.002) { fx += w * p.vx * aspect * toW * 10 * gain; fy += w * p.vy * toW * 10 * gain; }
+					}
+					// spring back, with damping; small steps so a long frame can't blow it up
+					let left = Math.min(0.25, frameDt);
+					while (left > 1e-6) {
+						const h = Math.min(left, 1 / 30); left -= h;
+						wd.vx[c] += (fx - 1.6 * wd.dx[c] - 2.2 * wd.vx[c]) * h;
+						wd.vy[c] += (fy - 1.6 * wd.dy[c] - 2.2 * wd.vy[c]) * h;
+						wd.dx[c] += wd.vx[c] * h; wd.dy[c] += wd.vy[c] * h;
+					}
+				}
+				// back from the view plane to the world (the view's rows are its axes)
+				const dx = wd.dx[c], dy = wd.dy[c];
+				Cx += V[0] * dx + V[3] * dy; Cy += V[1] * dx + V[4] * dy; Cz += V[2] * dx + V[5] * dy;
+			}
 			const Tx = R[0] * f.tx + R[1] * f.ty + R[2] * f.tz, Ty = R[3] * f.tx + R[4] * f.ty + R[5] * f.tz, Tz = R[6] * f.tx + R[7] * f.ty + R[8] * f.tz;
 			const Ax = R[0] * f.crx + R[1] * f.cry + R[2] * f.crz, Ay = R[3] * f.crx + R[4] * f.cry + R[5] * f.crz, Az = R[6] * f.crx + R[7] * f.cry + R[8] * f.crz;
 			const depth = -(V[6] * Cx + V[7] * Cy + V[8] * Cz) + thw * sc * (1 + Math.abs(F.curl));
@@ -461,9 +512,21 @@ export function createAquaLite(canvas, options = {}) {
 	const REGEN = ["seed", "count", "depth"];
 	return {
 		// advance the animation by dt seconds and draw a frame
-		render(dt) { updateScene(Math.min(0.25, Math.max(0, dt))); draw(); },
+		render(dt) { updateScene(Math.min(0.25, Math.max(0, dt))); draw(); pushes.length = 0; },
 		resize(w, h) { canvas.width = Math.max(1, w | 0); canvas.height = Math.max(1, h | 0); },
-		set(opts) { const regen = REGEN.some((k) => k in opts && opts[k] !== S[k]); Object.assign(S, opts); if (regen) genSheets(); },
+		set(opts) {
+			const regen = REGEN.some((k) => k !== "count" && k in opts && opts[k] !== S[k]);
+			const count = "count" in opts && opts.count !== S.count;
+			Object.assign(S, opts);
+			if (regen) genSheets();
+			else if (count) setCount(S.count);
+		},
+		// a steady sideways wind in screen widths per second, or a function of screen height (0 top … 1 bottom)
+		wind(speedOrFn) { windField = speedOrFn || 0; },
+		// shove the sheets near (x, y) (0…1, y down) with a velocity in screen widths/heights per second
+		push(x, y, vx, vy, radius = 0.15) { if (pushes.length < 16) pushes.push({ x, y, vx, vy, r: Math.max(0.01, radius) }); },
+		// gives the GPU context back; the canvas can't be drawn on afterwards
+		dispose() { gl.getExtension("WEBGL_lose_context")?.loseContext(); },
 		get() { return Object.assign({}, S); },
 		info() { return { cpuMs: lastCpuMs, width: canvas.width, height: canvas.height, sheets: sheets.length, verticesPerFrame: sheets.length * (Math.max(8, S.columns | 0) + 1) * (Math.max(2, S.rows | 0) + 1) }; },
 		lost() { return gl.isContextLost(); },

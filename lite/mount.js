@@ -12,10 +12,15 @@
 //   zIndex  CSS z-index of the canvas (default -1: behind the container's other content; note that a
 //           background on <body> paints over negative z-index layers, so put page backgrounds on <html>)
 //   onStats optional callback receiving { cpuMs, width, height, ... } about twice a second
+//   pointer true: moving the pointer over the page shoves the sheets near it (radius: pointerRadius,
+//           in screen heights, default 0.15)
+//
+// The returned object also has wind(speed) (a steady sideways wind, screen widths per second) and
+// push(x, y, vx, vy, radius) (a shove at a point, 0…1 screen units, y down).
 import { createAquaLite } from "./aqua-lite.js";
 
 export function mountAquaLite(container, options = {}) {
-	const { scale = 0.33, fps = 30, worker = false, zIndex = -1, onStats = null, ...engine } = options;
+	const { scale = 0.33, fps = 30, worker = false, zIndex = -1, onStats = null, pointer = false, pointerRadius = 0.15, ...engine } = options;
 	const canvas = document.createElement("canvas");
 	canvas.setAttribute("aria-hidden", "true");
 	Object.assign(canvas.style, {
@@ -47,6 +52,8 @@ export function mountAquaLite(container, options = {}) {
 			pause: () => w.postMessage({ type: "pause" }),
 			resume: () => w.postMessage({ type: "resume" }),
 			resize: ([width, height]) => w.postMessage({ type: "resize", width, height }),
+			wind: (speed) => w.postMessage({ type: "wind", speed: +speed || 0 }),
+			push: (x, y, vx, vy, r) => w.postMessage({ type: "push", x, y, vx, vy, r }),
 			stop: () => w.terminate(),
 			thread: "worker",
 		};
@@ -68,7 +75,9 @@ export function mountAquaLite(container, options = {}) {
 			pause: () => { running = false; cancelAnimationFrame(raf); },
 			resume: () => { if (!running) { running = true; last = 0; raf = requestAnimationFrame(loop); } },
 			resize: ([width, height]) => lite.resize(width, height),
-			stop: () => cancelAnimationFrame(raf),
+			wind: (speed) => lite.wind(speed),
+			push: (x, y, vx, vy, r) => lite.push(x, y, vx, vy, r),
+			stop: () => { cancelAnimationFrame(raf); lite.dispose(); },
 			thread: "page",
 			engine: lite,
 		};
@@ -80,12 +89,27 @@ export function mountAquaLite(container, options = {}) {
 	const onVis = () => (document.hidden ? api.pause() : api.resume());
 	document.addEventListener("visibilitychange", onVis);
 
+	// The pointer as wind: its speed in screen units per second, smoothed a little
+	let prev = null;
+	const onMove = (e) => {
+		const r = canvas.getBoundingClientRect(), now = performance.now();
+		const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+		if (prev && now > prev.t) {
+			const dt = Math.max(0.008, (now - prev.t) / 1000);
+			api.push(x, y, (x - prev.x) / dt, (y - prev.y) / dt, pointerRadius);
+		}
+		prev = { x, y, t: now };
+	};
+	if (pointer) window.addEventListener("pointermove", onMove);
+
 	return {
 		canvas,
 		thread: api.thread,
 		set: api.set,
+		wind: api.wind,
+		push: api.push,
 		pause: api.pause,
 		resume: api.resume,
-		destroy() { api.stop(); ro.disconnect(); document.removeEventListener("visibilitychange", onVis); canvas.remove(); },
+		destroy() { api.stop(); ro.disconnect(); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("pointermove", onMove); canvas.remove(); },
 	};
 }

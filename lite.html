@@ -11,7 +11,7 @@
   body { font: 12.5px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: var(--fg); }
   #backdrop { position: fixed; inset: 0; z-index: -2;
     background: linear-gradient(to bottom, #d9e9fb 0%, #8dbbec 10%, #3a7ad6 24%, #1d55bd 60%, #0c3592 100%); display: none; }
-  #panel { position: fixed; right: 16px; top: 16px; width: min(300px, calc(100vw - 32px)); background: var(--panel);
+  #panel { position: fixed; right: 16px; top: 16px; bottom: 16px; overflow: auto; width: min(300px, calc(100vw - 32px)); background: var(--panel);
     border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
   #panel h1 { font-size: 13px; margin: 0 0 6px; }
   .row { display: grid; grid-template-columns: 96px 1fr 44px; gap: 6px; align-items: center; margin: 5px 0; }
@@ -35,6 +35,22 @@
   <div class="row"><label for="columns">Columns</label><input id="columns" type="range" min="16" max="256" step="8" value="72"><output></output></div>
   <div class="row"><label for="rows">Rows</label><input id="rows" type="range" min="4" max="48" step="2" value="12"><output></output></div>
   <div class="row"><label for="count">Sheets</label><input id="count" type="range" min="1" max="16" step="1" value="7"><output></output></div>
+  <div class="row"><label for="speed">Speed</label><input id="speed" type="range" min="0" max="0.3" step="0.005" value="0.06"><output></output></div>
+  <div class="row"><label for="flow">Flow</label><input id="flow" type="range" min="0" max="3" step="0.05" value="0.6"><output></output></div>
+  <div class="row"><label for="bend">Bend</label><input id="bend" type="range" min="0" max="3" step="0.05" value="1"><output></output></div>
+  <div class="row"><label for="swirl">Swirl</label><input id="swirl" type="range" min="0" max="1" step="0.01" value="0.35"><output></output></div>
+  <div class="row"><label for="twist">Twist</label><input id="twist" type="range" min="0" max="2" step="0.05" value="1"><output></output></div>
+  <div class="row"><label for="tumble">Tumble</label><input id="tumble" type="range" min="0" max="1.5" step="0.05" value="0.35"><output></output></div>
+  <div class="row"><label for="width">Width</label><input id="width" type="range" min="0.3" max="4" step="0.05" value="1.9"><output></output></div>
+  <div class="row"><label for="dive">Dive</label><input id="dive" type="range" min="0" max="3" step="0.05" value="0.4"><output></output></div>
+  <div class="row"><label for="roll">Roll</label><input id="roll" type="range" min="-10" max="10" step="0.1" value="0"><output></output></div>
+  <div class="row"><label for="wander">Wander</label><input id="wander" type="range" min="0" max="1.5" step="0.05" value="0.3"><output></output></div>
+  <div class="row"><label for="edgeLine">Edge glints</label><input id="edgeLine" type="range" min="0" max="1.5" step="0.05" value="0.5"><output></output></div>
+  <div class="row"><label for="gloss">Gloss</label><input id="gloss" type="range" min="0" max="1.5" step="0.02" value="0.18"><output></output></div>
+  <div class="row"><label for="haze">Depth fade</label><input id="haze" type="range" min="0" max="1" step="0.01" value="0.35"><output></output></div>
+  <div class="row"><label for="windGain">Wind response</label><input id="windGain" type="range" min="0" max="4" step="0.05" value="1"><output></output></div>
+  <div class="row"><label for="wind">Steady wind</label><input id="wind" type="range" min="-0.05" max="0.05" step="0.001" value="0"><output></output></div>
+  <label class="chk"><button id="reseed" type="button">New swooshes</button> &nbsp;move the pointer to push them</label>
   <label class="chk"><input id="transparent" type="checkbox"> Transparent (over a CSS gradient backdrop)</label>
   <label class="chk"><input id="worker" type="checkbox"> Separate thread (reloads)</label>
   <div id="stats"></div>
@@ -51,18 +67,24 @@ const stats = document.getElementById("stats");
 let frames = 0, cpu = 0, t0 = performance.now();
 const sheets = mountAquaLite(document.body, {
   worker: useWorker,
+  pointer: true,
   onStats: (s) => {
     cpu = s.cpuMs; frames++;
     stats.textContent = `thread: ${s.thread}\nrender: ${s.width}×${s.height}\ngeometry CPU: ${s.cpuMs.toFixed(3)} ms/frame\nvertices: ${s.verticesPerFrame}`;
   },
 });
 
-for (const id of ["scale", "blur", "fps", "columns", "rows", "count"]) {
+for (const id of ["scale", "blur", "fps", "columns", "rows", "count", "speed", "flow", "bend", "swirl", "twist", "tumble", "width", "dive", "roll", "wander", "edgeLine", "gloss", "haze", "windGain"]) {
   const el = document.getElementById(id), out = el.nextElementSibling;
   const show = () => (out.textContent = (+el.value).toString());
   show();
   el.addEventListener("input", () => { show(); sheets.set({ [id]: +el.value }); });
 }
+const windEl = document.getElementById("wind");
+windEl.addEventListener("input", () => { windEl.nextElementSibling.textContent = windEl.value; sheets.wind(+windEl.value); });
+windEl.nextElementSibling.textContent = windEl.value;
+let seed = 8;
+document.getElementById("reseed").onclick = () => sheets.set({ seed: ++seed });
 document.getElementById("transparent").addEventListener("change", (e) => {
   document.getElementById("backdrop").style.display = e.target.checked ? "block" : "none";
   sheets.set({ sky: !e.target.checked, bgTop: e.target.checked ? "#8dbbec" : "#3f8bcb", bgBottom: e.target.checked ? "#0c3592" : "#0b1f57" });

@@ -35,6 +35,8 @@ self.onmessage = (e) => {
 		} else if (m.type === "resize") lite && lite.resize(m.width, m.height);
 		else if (m.type === "set") lite && lite.set(m.options);
 		else if (m.type === "fps") fps = m.fps;
+		else if (m.type === "wind") lite && lite.wind(m.speed);
+		else if (m.type === "push") lite && lite.push(m.x, m.y, m.vx, m.vy, m.r);
 		else if (m.type === "pause") running = false;
 		else if (m.type === "resume") { if (!running) { running = true; last = 0; loop(performance.now()); } }
 	} catch (err) {
