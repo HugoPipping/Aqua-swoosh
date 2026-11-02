@@ -29,6 +29,35 @@ Move the mouse to reveal the ⚙ button, or press **H**, to open the control pan
   *Fixed render size* to record at an exact resolution.
 - Add `?clean` to the URL to hide the UI entirely (wallpaper / screensaver use).
 
+## Lite mode (as a background)
+
+`lite/` is a cut-down engine meant to sit behind something heavier, such as a rain simulation.
+Same sheets and motion, but:
+
+- **Fixed mesh**: each sheet is an even grid (`columns` × `rows`, default 72 × 12), so the CPU only
+  traces each ribbon at a few dozen points per frame (roughly a tenth of the full engine's work), and
+  the columns never slide, so nothing stutters.
+- **Low resolution + blur**: renders at `scale` × the screen resolution (default 0.33, about a ninth
+  of the pixels), blurs there (`blur`, in render pixels), and lets the browser upscale smoothly.
+- **Frame-rate cap**: `fps` (default 30); the motion is slow enough that 20–30 is plenty.
+- **Transparent mode**: `sky: false` draws only the sheets, to layer over an existing backdrop.
+  The sky colours (`bgTop`, `bgBottom`, `glow`) still tint the distant sheets, so set them to match.
+- **Optional separate thread**: `worker: true` draws through an OffscreenCanvas in a Web Worker.
+  Off by default: a host that already keeps every core busy gains little from one more thread, and
+  the page-thread cost is small.
+
+```js
+import { mountAquaLite } from "./lite/mount.js";
+const sheets = mountAquaLite(document.body, { scale: 0.33, blur: 1, fps: 30, sky: false });
+sheets.set({ bgTop: "#8dbbec", bgBottom: "#0c3592" });   // any option, any time
+sheets.destroy();
+```
+
+`lite.html` is a test page with live controls and a CPU readout (ES modules: serve the folder over
+HTTP, e.g. `python3 -m http.server`, rather than opening the file directly).
+`createAquaLite(canvas, options)` in `lite/aqua-lite.js` is the bare engine, for hosts that want to
+drive the frames themselves.
+
 ## How it works
 
 - Each sheet is a ribbon whose heading turns along its length, so curves can loop back on themselves.

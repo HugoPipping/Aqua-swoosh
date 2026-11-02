@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Aqua Sheets Lite</title>
+<style>
+  :root { --panel: rgba(14,24,44,.78); --fg: #eef4ff; --muted: #9fb3cf; --line: rgba(255,255,255,.12); }
+  html { background: #0b1f57; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }   /* no body background: it would paint over the z-index -1 canvas */
+  body { font: 12.5px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: var(--fg); }
+  #backdrop { position: fixed; inset: 0; z-index: -2;
+    background: linear-gradient(to bottom, #d9e9fb 0%, #8dbbec 10%, #3a7ad6 24%, #1d55bd 60%, #0c3592 100%); display: none; }
+  #panel { position: fixed; right: 16px; top: 16px; width: min(300px, calc(100vw - 32px)); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+  #panel h1 { font-size: 13px; margin: 0 0 6px; }
+  .row { display: grid; grid-template-columns: 96px 1fr 44px; gap: 6px; align-items: center; margin: 5px 0; }
+  .row label { color: var(--muted); }
+  .row output { text-align: right; font-variant-numeric: tabular-nums; }
+  .chk { display: flex; gap: 6px; align-items: center; margin: 6px 0; color: var(--muted); }
+  input[type=range] { width: 100%; accent-color: #7cc0ff; }
+  #stats { margin-top: 8px; color: var(--muted); font: 11px ui-monospace, Menlo, monospace; white-space: pre; }
+  #hide { position: absolute; right: 8px; top: 6px; background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 15px; }
+  body.clean #panel { display: none; }
+</style>
+</head>
+<body>
+<div id="backdrop"></div>
+<div id="panel">
+  <button id="hide" title="Hide (H)">✕</button>
+  <h1>Aqua Sheets Lite</h1>
+  <div class="row"><label for="scale">Resolution</label><input id="scale" type="range" min="0.1" max="1" step="0.01" value="0.33"><output></output></div>
+  <div class="row"><label for="blur">Blur</label><input id="blur" type="range" min="0" max="4" step="0.1" value="1"><output></output></div>
+  <div class="row"><label for="fps">Frame rate</label><input id="fps" type="range" min="5" max="60" step="1" value="30"><output></output></div>
+  <div class="row"><label for="columns">Columns</label><input id="columns" type="range" min="16" max="256" step="8" value="72"><output></output></div>
+  <div class="row"><label for="rows">Rows</label><input id="rows" type="range" min="4" max="48" step="2" value="12"><output></output></div>
+  <div class="row"><label for="count">Sheets</label><input id="count" type="range" min="1" max="16" step="1" value="7"><output></output></div>
+  <label class="chk"><input id="transparent" type="checkbox"> Transparent (over a CSS gradient backdrop)</label>
+  <label class="chk"><input id="worker" type="checkbox"> Separate thread (reloads)</label>
+  <div id="stats"></div>
+</div>
+<script type="module">
+import { mountAquaLite } from "./lite/mount.js";
+
+const params = new URLSearchParams(location.search);
+const useWorker = params.get("worker") === "1";
+document.getElementById("worker").checked = useWorker;
+if (params.has("clean")) document.body.classList.add("clean");
+
+const stats = document.getElementById("stats");
+let frames = 0, cpu = 0, t0 = performance.now();
+const sheets = mountAquaLite(document.body, {
+  worker: useWorker,
+  onStats: (s) => {
+    cpu = s.cpuMs; frames++;
+    stats.textContent = `thread: ${s.thread}\nrender: ${s.width}×${s.height}\ngeometry CPU: ${s.cpuMs.toFixed(3)} ms/frame\nvertices: ${s.verticesPerFrame}`;
+  },
+});
+
+for (const id of ["scale", "blur", "fps", "columns", "rows", "count"]) {
+  const el = document.getElementById(id), out = el.nextElementSibling;
+  const show = () => (out.textContent = (+el.value).toString());
+  show();
+  el.addEventListener("input", () => { show(); sheets.set({ [id]: +el.value }); });
+}
+document.getElementById("transparent").addEventListener("change", (e) => {
+  document.getElementById("backdrop").style.display = e.target.checked ? "block" : "none";
+  sheets.set({ sky: !e.target.checked, bgTop: e.target.checked ? "#8dbbec" : "#3f8bcb", bgBottom: e.target.checked ? "#0c3592" : "#0b1f57" });
+});
+document.getElementById("worker").addEventListener("change", (e) => {
+  params.set("worker", e.target.checked ? "1" : "0"); location.search = params.toString();
+});
+const toggle = () => document.body.classList.toggle("clean");
+document.getElementById("hide").onclick = toggle;
+addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "h") toggle(); });
+window.__sheets = sheets;
+</script>
+</body>
+</html>
