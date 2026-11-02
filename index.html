@@ -1,0 +1,1220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Aqua Sheets 1.0</title>
+<style>
+  :root{
+    --panel-bg: rgba(14,24,44,.74);
+    --fg:#eef4ff; --muted:#9fb3cf; --accent:#7cc0ff; --line:rgba(255,255,255,.12);
+    --btn:rgba(255,255,255,.08); --btn-h:rgba(255,255,255,.16);
+  }
+  html,body{margin:0;height:100%;background:#0b3a94;overflow:hidden;touch-action:none}
+  canvas{position:fixed;left:0;top:0;display:block}
+  body.hide-cursor{cursor:none}
+
+  #gear{position:fixed;right:16px;top:16px;width:40px;height:40px;border-radius:50%;
+    border:1px solid var(--line);background:var(--panel-bg);color:var(--fg);cursor:pointer;
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+    opacity:0;pointer-events:none;transition:opacity .5s;display:grid;place-items:center;z-index:3}
+  body.ui-awake #gear{opacity:.85;pointer-events:auto}
+  #gear svg{width:20px;height:20px}
+
+  #panel{position:fixed;right:16px;top:16px;bottom:16px;width:min(360px,calc(100vw - 32px));
+    overflow:auto;overscroll-behavior:contain;background:var(--panel-bg);
+    backdrop-filter:blur(16px) saturate(1.2);-webkit-backdrop-filter:blur(16px) saturate(1.2);
+    border:1px solid var(--line);border-radius:14px;color:var(--fg);
+    font:12.5px/1.35 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+    transform:translateX(calc(100% + 40px));transition:transform .4s cubic-bezier(.2,.7,.2,1);z-index:4;
+    box-shadow:0 10px 40px rgba(0,0,0,.35)}
+  #panel.open{transform:none}
+  #panel header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px 6px;
+    position:sticky;top:0;background:rgb(18,30,52);z-index:2;border-radius:14px 14px 0 0}
+  #panel h1{font-size:14px;margin:0;font-weight:600;letter-spacing:.02em}
+  #panel .x{background:none;border:0;color:var(--muted);font-size:18px;cursor:pointer;padding:4px 6px}
+  details{border-top:1px solid var(--line);padding:2px 14px 8px}
+  summary{cursor:pointer;padding:8px 0;font-weight:600;color:var(--accent);list-style:none;user-select:none}
+  summary::-webkit-details-marker{display:none}
+  summary::before{content:"▸ ";display:inline-block;transition:transform .2s}
+  details[open] summary::before{transform:rotate(90deg)}
+  .row{display:grid;grid-template-columns:84px 1fr 58px 22px;align-items:center;gap:6px;margin:4px 0}
+  .row > label{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .row.check{grid-template-columns:1fr auto}
+  .row .wide{grid-column:2 / 5}
+  .row .num{padding:2px 4px;text-align:right;font-variant-numeric:tabular-nums;-moz-appearance:textfield}
+  .row .num::-webkit-inner-spin-button,.row .num::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+  .row .more{background:none;border:0;color:var(--muted);cursor:pointer;font-size:15px;padding:0;line-height:1;border-radius:5px;height:22px}
+  .row .more:hover,.row.open .more{color:var(--fg);background:var(--btn)}
+  .row.drifting > label{color:var(--accent)}
+  .row.drifting > label::after{content:" ∿"}
+  .row .sub{display:none;grid-column:1 / -1;background:rgba(0,0,0,.2);border-radius:8px;padding:6px 8px;margin:2px 0 4px}
+  .row.open .sub{display:block}
+  .subrow{display:flex;align-items:center;gap:6px;margin:3px 0;color:var(--muted)}
+  .subrow input[type=number]{width:70px;padding:2px 4px}
+  .subrow input[type=range]{flex:1;min-width:0}
+  .subrow output{width:42px;text-align:right;color:var(--fg);opacity:.8;font-variant-numeric:tabular-nums}
+  .subrow .dl{display:flex;align-items:center;gap:4px;color:var(--fg);cursor:pointer}
+  button.b.sm{padding:2px 7px}
+  .sub .hint{margin:4px 0 0}
+  input[type=range]{width:100%;accent-color:var(--accent);margin:0}
+  input[type=color]{width:100%;height:24px;border:1px solid var(--line);border-radius:6px;background:none;padding:0;cursor:pointer}
+  input[type=number],select,textarea{width:100%;box-sizing:border-box;background:rgba(0,0,0,.25);color:var(--fg);
+    border:1px solid var(--line);border-radius:6px;padding:4px 6px;font:inherit}
+  select option{background:#16233d}
+  .btns{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+  button.b{background:var(--btn);color:var(--fg);border:1px solid var(--line);border-radius:7px;
+    padding:6px 10px;font:inherit;cursor:pointer}
+  button.b:hover{background:var(--btn-h)}
+  button.b.rec{background:rgba(220,50,60,.55)}
+  .hint{color:var(--muted);font-size:11.5px;margin:6px 0}
+  .wh{display:grid;grid-template-columns:1fr auto 1fr;gap:6px;align-items:center}
+  #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--panel-bg);color:var(--fg);
+    font:13px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:8px 14px;border-radius:10px;
+    border:1px solid var(--line);opacity:0;transition:opacity .4s;pointer-events:none;z-index:5;
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);max-width:calc(100vw - 32px)}
+  #toast.show{opacity:1}
+  #fps{position:fixed;left:12px;top:10px;color:#fff;font:11px ui-monospace,Menlo,monospace;opacity:.6;z-index:2;display:none}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="fps"></div>
+<button id="gear" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+<aside id="panel" aria-label="Settings panel">
+  <header><h1>Aqua Sheets</h1><button class="x" id="closePanel" aria-label="Close">✕</button></header>
+  <div id="controls"></div>
+</aside>
+<div id="toast"></div>
+
+<script>
+"use strict";
+/* ============================================================
+   Aqua Sheets — translucent undulating sheet engine (WebGL 1)
+   Keys: H panel · Space pause · F fullscreen · R new seed · S snapshot · P fps
+   ============================================================ */
+
+// ---------- Settings ----------
+const DEFAULTS = {
+  // motion
+  speed: 0.06, flow: 0.6, bend: 1.0, wavelength: 1.0, twist: 1.0, morph: 0.5,
+  // camera
+  dive: 0.4, roll: 0, swirl: 0.35, wander: 0.3, tumble: 0.35,
+  // sheets
+  seed: 8, count: 7, width: 1.9, length: 1.0, spread: 1.0, depth: 1.4, angle: 20, curl: 1.0,
+  // look
+  opacity: 0.1, fresnel: 0.55, gloss: 0.18, shininess: 24, edgeLine: 0.5, softness: 0.55,
+  haze: 0.35, farTint: 0.6, falloff: 0.45, nearFade: 0.5,
+  // colours
+  bgTop: '#3f8bcb', bgBottom: '#0b1f57', glow: '#4b9fd6', glowAmt: 0.3, vignette: 0.25,
+  tint: '#a9d6f2', highlight: '#d8efff',
+  // rendering
+  renderScale: 1.0, maxDpr: 2, autoQuality: true, detail: 1, grain: 0.6,
+  // capture
+  capW: 5120, capH: 3200, fixedSize: false, recFps: 60,
+};
+
+const PRESETS = {
+  'Aqua (Panther)': {},
+  'Still Panther': { dive:0, swirl:0.15, speed:0.04, tumble:0.15, wander:0.1 },
+  'Whirlpool dive': { dive:0.45, swirl:0.85, roll:1.5, count:12, depth:1.7, bend:0.8, seed:17,
+    glowAmt:0.4, farTint:0.7, haze:0.3, opacity:0.12 },
+  'Tiger Blue': { bgTop:'#3f86dc', bgBottom:'#05205c', glow:'#6fb6f0', glowAmt:0.32, tint:'#b8dcf6',
+    count:9, angle:14, depth:1.8, spread:1.2, seed:21 },
+  'Graphite': { bgTop:'#8e979f', bgBottom:'#262b31', glow:'#c4cbd3', glowAmt:0.3, tint:'#e4e8ec', highlight:'#f4f6f8', seed:8 },
+  'Sea Glass': { bgTop:'#4fc2b8', bgBottom:'#063f52', glow:'#9ff0e2', glowAmt:0.35, tint:'#c9f5ec', seed:12, angle:-12 },
+  'Dusk': { bgTop:'#e08868', bgBottom:'#2e1752', glow:'#ffc79a', glowAmt:0.4, tint:'#ffe1cc', highlight:'#fff2e6',
+    seed:41, angle:8, count:6 },
+  'Midnight': { bgTop:'#1d2d5c', bgBottom:'#02040c', glow:'#3d5fc4', glowAmt:0.25, tint:'#9fb8ff',
+    opacity:0.05, fresnel:0.7, haze:0.7, gloss:0.3, seed:5, count:10, dive:0.3, swirl:0.6, roll:-1 },
+  'Calm (barely moving)': { speed:0.025, flow:0.4, bend:0.7, twist:0.6, morph:0.3, dive:0.08 },
+};
+
+const SCHEMA = [
+  ['Motion', [
+    ['speed','Speed','range',0.002,2,0.0001,'log'],
+    ['flow','Flow','range',0,2,0.01],
+    ['bend','Bend','range',0,2.5,0.01],
+    ['wavelength','Wavelength','range',0.3,3,0.01],
+    ['twist','Twist','range',0,2,0.01],
+    ['tumble','Tumble','range',0,1.5,0.01],
+    ['morph','Morph','range',0,2,0.01],
+  ]],
+  ['Camera', [
+    ['dive','Dive','range',0.005,5,0.0001,'log'],
+    ['roll','Roll °/s','range',-10,10,0.1],
+    ['swirl','Swirl','range',0,1,0.01],
+    ['wander','Wander','range',0,1.5,0.01],
+  ]],
+  ['Sheets', [
+    ['seed','Seed','int',0,99999,1],
+    ['count','Count','range',1,16,1],
+    ['width','Width','range',0.2,3,0.01],
+    ['length','Length','range',0.3,2,0.01],
+    ['spread','Spread','range',0,2,0.01],
+    ['depth','Depth','range',0.3,3,0.01],
+    ['angle','Angle','range',-90,90,0.5],
+    ['curl','Curl','range',0,2.5,0.01],
+  ]],
+  ['Look', [
+    ['opacity','Body','range',0,0.4,0.005],
+    ['fresnel','Fresnel','range',0,1.5,0.01],
+    ['gloss','Gloss','range',0,1.5,0.01],
+    ['shininess','Shininess','range',4,200,1],
+    ['edgeLine','Edge glints','range',0,1.5,0.01],
+    ['softness','Softness','range',0.02,1,0.01],
+    ['haze','Far fade','range',0,1,0.01],
+    ['farTint','Far tint','range',0,1,0.01],
+    ['falloff','Far dimming','range',0,1,0.01],
+    ['nearFade','Near fade','range',0,1.5,0.01],
+  ]],
+  ['Colours', [
+    ['bgTop','Sky top','color'],
+    ['bgBottom','Sky bottom','color'],
+    ['glow','Glow','color'],
+    ['glowAmt','Glow amount','range',0,1.5,0.01],
+    ['vignette','Vignette','range',0,1,0.01],
+    ['tint','Sheet tint','color'],
+    ['highlight','Highlight','color'],
+  ]],
+  ['Rendering', [
+    ['renderScale','Render scale','range',0.25,2,0.05],
+    ['maxDpr','Max DPR','range',1,4,0.25],
+    ['autoQuality','Auto quality','check'],
+    ['detail','Mesh detail','range',0.25,4,0.05],
+    ['grain','Dither','range',0,2,0.05],
+  ]],
+];
+
+// ---------- Utilities ----------
+const $ = (s, el=document) => el.querySelector(s);
+const clamp = (x,a,b) => Math.min(b, Math.max(a, x));
+const smooth = (a,b,x) => { const t = clamp((x-a)/(b-a),0,1); return t*t*(3-2*t); };
+function hex2rgb(h){ const n = parseInt(h.slice(1),16); return [(n>>16&255)/255,(n>>8&255)/255,(n&255)/255]; }
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a);
+  t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function lsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function lsSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+let toastTimer;
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),2200); }
+const b64e = s => btoa(unescape(encodeURIComponent(s)));
+const b64d = s => decodeURIComponent(escape(atob(s)));
+
+let S = Object.assign({}, DEFAULTS);
+
+// ---------- WebGL setup ----------
+const canvas = $('#c');
+const gl = canvas.getContext('webgl', {antialias:true, alpha:false, premultipliedAlpha:true,
+  preserveDrawingBuffer:false, powerPreference:'high-performance'});
+if(!gl){ document.body.innerHTML = '<p style="color:#fff;font:16px sans-serif;padding:24px">WebGL is not available in this browser.</p>'; throw new Error('no webgl'); }
+
+const hp = gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.HIGH_FLOAT);
+const FPREC = (hp && hp.precision > 0) ? 'highp' : 'mediump';
+
+// Shared background gradient — also tints distant sheets (aerial perspective)
+const SKY_GLSL = `
+uniform vec3 uTop, uBot, uGlow; uniform float uGlowAmt, uVig; uniform vec2 uRes;
+vec3 sky(vec2 uv){
+  float aspect = uRes.x/uRes.y;
+  float t = clamp(uv.y*0.8 + uv.x*0.3 - 0.05, 0.0, 1.0);
+  vec3 col = mix(uBot, uTop, smoothstep(0.0, 1.0, t));
+  vec2 p = uv - vec2(0.5, 0.78); p.x *= aspect*0.6;
+  col += uGlow * uGlowAmt * exp(-dot(p,p)*3.0);
+  vec2 q = uv - 0.5; q.x *= aspect*0.8;
+  return col * (1.0 - uVig*dot(q,q)*1.3);
+}`;
+
+const BG_VS = `
+attribute vec2 aPos; varying vec2 vUV;
+void main(){ vUV = aPos*0.5+0.5; gl_Position = vec4(aPos,0.0,1.0); }`;
+
+const BG_FS = `precision ${FPREC} float;
+varying vec2 vUV;
+uniform float uGrain, uT;
+${SKY_GLSL}
+float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453); }
+void main(){
+  vec3 col = sky(vUV);
+  col += (hash(gl_FragCoord.xy + fract(uT*7.0)*91.7) + hash(gl_FragCoord.yx*1.3 + 3.1) - 1.0) * uGrain / 255.0;
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+// Sheets: geometry is built on the CPU each frame (camera-relative world space);
+// the vertex shader applies camera roll + projection and per-vertex depth fades.
+const SHEET_VS = `
+// One record per mesh column (duplicated for the two sides of a row strip); each instance is one row strip.
+attribute vec4 aC;    // centre-line point (camera-relative world), u
+attribute vec4 aT;    // tangent, half-width (local units, fold guard applied)
+attribute vec4 aA;    // across direction, side (0 = this row, 1 = next row)
+attribute vec4 aK;    // a'·T, n'·T, twist rate
+attribute float aRow; // per instance: row index
+uniform mat4 uProj, uView;
+uniform vec4 uFade;   // nearStart, farEnd, nearFade, haze
+uniform vec3 uSheet;  // rows, curl, world scale
+varying vec3 vPv; varying vec3 vT; varying vec3 vA; varying vec4 vK; varying vec2 vUV; varying float vFade; varying float vFog;
+void main(){
+  float v = (aRow + aA.w) / uSheet.x * 2.0 - 1.0;
+  vec3 Tt = aT.xyz, A = aA.xyz, Nn = cross(Tt, A);
+  float hw = aT.w, off = v*hw, k = uSheet.y*(v*v - 0.333)*hw;
+  vec3 pos = aC.xyz + (A*off + Nn*k)*uSheet.z;
+  vec4 pv = uView * vec4(pos, 1.0);
+  vPv = pv.xyz;
+  vT = (uView * vec4(Tt, 0.0)).xyz;     // tangent along the ribbon
+  vA = (uView * vec4(A, 0.0)).xyz;      // direction across the ribbon
+  vK = vec4(aK.xyz, hw);                // a'·T, n'·T, twist rate, half-width
+  vec2 aUV = vec2(aC.w, v);
+  float d = -pv.z;
+  float f = clamp((d - uFade.x) / (uFade.y - uFade.x), 0.0, 1.0);
+  vFog = f;
+  vFade = (1.0 - smoothstep(0.7, 1.0, f))                       // emerge from the depths
+        * smoothstep(0.08, 0.1 + uFade.z*2.5, d)                 // dissolve as we pass through
+        * (1.0 - uFade.w*f*0.8);                                 // general far fade
+  vUV = aUV;
+  gl_Position = uProj * pv;
+}`;
+
+const SHEET_FS = `precision ${FPREC} float;
+varying vec3 vPv; varying vec3 vT; varying vec3 vA; varying vec4 vK; varying vec2 vUV; varying float vFade; varying float vFog;
+uniform vec3 uTint, uHi;
+uniform float uCurl;
+uniform vec4 uLook;   // opacity, fresnel, gloss, shininess
+uniform vec4 uLook2;  // edge glints, grain, far dimming, far tint
+uniform float uSoft, uT, uWire;
+${SKY_GLSL}
+float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453); }
+void main(){
+  if(uWire > 0.5){ gl_FragColor = vec4(0.35, 1.0, 0.6, 1.0) * 0.55 * max(vFade, 0.15); return; }
+  // exact surface normal at this pixel's position across the ribbon (no row banding at any curl)
+  vec3 Tt = normalize(vT);
+  vec3 A = normalize(vA - Tt*dot(vA, Tt));
+  vec3 Nn = cross(Tt, A);
+  float v = vUV.y, off = v*vK.w, k = uCurl*(v*v - 0.333)*vK.w;
+  vec3 dPs = Tt*(1.0 + vK.x*off + vK.y*k) + vK.z*(Nn*off - A*k);
+  vec3 dPv = A + Nn*(uCurl*2.0*v);
+  vec3 N = normalize(cross(dPs, dPv));
+  vec3 V = normalize(-vPv);
+  float ndv = dot(N, V);
+  if(ndv < 0.0){ N = -N; ndv = -ndv; }
+  float g = 1.0 - clamp(ndv, 0.0, 1.0);
+  float fres = g*g*g;
+  float glint = pow(g, 14.0) * 1.6 * uLook2.x;          // hairline where the sheet turns edge-on
+  float soft = clamp(uSoft * (1.0 + vFog*0.6), 0.02, 1.0);
+  float edge = 1.0 - smoothstep(1.0 - soft, 1.0, abs(vUV.y));
+  float ends = smoothstep(0.0, 0.15, 1.0 - abs(vUV.x));
+  float m = edge * ends * vFade;
+  float a = clamp((uLook.x + uLook.y*fres + glint) * m, 0.0, 1.0);
+  vec3 L = normalize(vec3(-0.35, 0.75, 0.55));
+  vec3 H = normalize(L + V);
+  float spec = pow(max(dot(N, H), 0.0), uLook.w) * uLook.z * m;
+  float fog = vFog * uLook2.w;
+  vec3 behind = sky(gl_FragCoord.xy / uRes);
+  vec3 tint = mix(uTint, behind*1.25, fog);
+  float bright = 1.0 - uLook2.z*fog;
+  vec3 col = (tint*a + mix(uHi, behind*1.4, fog*0.7)*spec) * bright;
+  col += (hash(gl_FragCoord.xy + fract(uT*5.0)*57.3) - 0.5) * uLook2.y / 255.0 * a;
+  gl_FragColor = vec4(col, a);
+}`;
+
+function compile(type, src){
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s) + '\n' + src);
+  return s;
+}
+function program(vs, fs, attribs){
+  const p = gl.createProgram();
+  gl.attachShader(p, compile(gl.VERTEX_SHADER, vs)); gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs));
+  attribs.forEach((a,i) => gl.bindAttribLocation(p, i, a));
+  gl.linkProgram(p);
+  if(!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  const u = {}; const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for(let i=0;i<n;i++){ const name = gl.getActiveUniform(p,i).name; u[name] = gl.getUniformLocation(p,name); }
+  return {p, u};
+}
+const bgProg = program(BG_VS, BG_FS, ['aPos']);
+const shProg = program(SHEET_VS, SHEET_FS, ['aC','aT','aA','aK','aRow']);
+
+const quad = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+
+// ---------- Mesh: per-column records on the CPU, vertices built on the GPU (instanced row strips) ----------
+const MAX_SHEETS = 32, STRIDE = 16;  // C3 u | T3 hw | A3 side | ka kn tau _
+const inst = gl.getExtension('ANGLE_instanced_arrays');
+if(!inst){ document.body.insertAdjacentHTML('beforeend', '<p style="position:fixed;left:16px;bottom:16px;color:#fff;font:14px sans-serif">This browser lacks WebGL instancing (ANGLE_instanced_arrays).</p>'); }
+let mesh = null, lastVerts = 0, snapshotting = false, wire = false;
+function buildMesh(){
+  if(mesh) return;
+  const rows = new Float32Array(64); for(let i=0;i<64;i++) rows[i] = i;
+  const rb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, rb); gl.bufferData(gl.ARRAY_BUFFER, rows, gl.STATIC_DRAW);
+  mesh = {vb: gl.createBuffer(), rb, data: new Float32Array(8192*STRIDE)};
+}
+function ensureCap(nRec){
+  if(mesh.data.length < nRec*STRIDE) mesh.data = new Float32Array(Math.ceil(nRec*1.5)*STRIDE);
+}
+
+// ---------- Scene: sheets live at world depths; the camera dives through them ----------
+const CAM_D = 3.5, TAN = 1/CAM_D, NEAR0 = 1.2, KILL = 1.5;
+const depthRange = () => S.depth * 6;
+let camZ = 0, roll = 0, sheets = [];
+
+function rollSheet(slot, gen, dist){
+  const r = mulberry32((S.seed*7919 + slot*104729 + gen*1299709) | 0);
+  r(); r();
+  return {
+    slot, gen, z: camZ - dist,
+    lat: TAN * dist,                            // lateral placement spans the view at spawn depth
+    ang: r()*Math.PI*2, rad: Math.sqrt(r())*1.1,
+    w: 0.55 + r()*0.9, len: 0.8 + r()*0.5, yawJ: (r()-0.5)*0.7,
+    curv: (r()-0.5), cPh: r()*6.283,
+    b1: 0.5 + r()*0.6, k1: 0.45 + r()*0.45, p1: r()*6.283,
+    b2: 0.05 + r()*0.1, k2: 1.1 + r()*0.9, p2: r()*6.283,
+    pa: 0.12 + r()*0.18, kp: 0.4 + r()*0.5, pp: r()*6.283,
+    t0: (r()-0.5)*0.7, ta: 0.3 + r()*0.7, kt: 0.35 + r()*0.55, tp: r()*6.283,
+    curl: (r()-0.5)*1.4,
+    sc: 0.8 + r()*0.4,                          // world size: same at all depths, so far sheets look small
+  };
+}
+// Extra per-sheet character (derived from seed/slot/gen, so old captures get it too):
+// a resting tilt plus a slow tumble around its own axes, and its own wave tempo.
+function sheetVariety(sh){
+  if(sh._vy) return sh._vy;
+  const r = mulberry32((S.seed*48271 + sh.slot*69621 + sh.gen*16807 + 11) | 0); r(); r();
+  return sh._vy = {
+    ax0: (r()-0.5)*1.6, axA: 0.25 + r()*0.5, axW: 0.12 + r()*0.3, axP: r()*6.283,
+    ay0: (r()-0.5)*1.6, ayA: 0.25 + r()*0.5, ayW: 0.12 + r()*0.3, ayP: r()*6.283,
+    az0: (r()-0.5)*0.8, azA: 0.15 + r()*0.3, azW: 0.08 + r()*0.2, azP: r()*6.283,
+    tempo: 0.65 + r()*0.8, tPh: r()*20,
+  };
+}
+// Rotation of the sheet around its middle (column-major 3×3): Rz·Ry·Rx
+function sheetRotation(sh, out){
+  const v = sheetVariety(sh), k = S.tumble;
+  const x = k*(v.ax0 + v.axA*Math.sin(T*v.axW + v.axP));
+  const y = k*(v.ay0 + v.ayA*Math.sin(T*v.ayW + v.ayP));
+  const z = k*(v.az0 + v.azA*Math.sin(T*v.azW + v.azP));
+  const cx = Math.cos(x), sx = Math.sin(x), cy = Math.cos(y), sy = Math.sin(y), cz = Math.cos(z), sz = Math.sin(z);
+  // rows of R
+  out[0] = cz*cy; out[1] = cz*sy*sx - sz*cx; out[2] = cz*sy*cx + sz*sx;
+  out[3] = sz*cy; out[4] = sz*sy*sx + cz*cx; out[5] = sz*sy*cx - cz*sx;
+  out[6] = -sy;   out[7] = cy*sx;            out[8] = cy*cx;
+  return out;
+}
+function genSheets(){
+  const n = S.count|0, R = depthRange(), r = mulberry32(S.seed*31 + 5);
+  sheets = [];
+  for(let i=0;i<n;i++){
+    const f = 0.12 + (i + 0.5 + (r()-0.5)*0.6) / n * 0.78;
+    sheets.push(rollSheet(i, 0, NEAR0 + R*f));
+  }
+}
+function updateScene(dt){
+  camZ -= dt * S.speed * S.dive * 3;
+  roll += dt * S.speed * S.roll * Math.PI/180 * 3;
+  const R = depthRange();
+  for(let i=0;i<sheets.length;i++){
+    const sh = sheets[i];
+    if(camZ - sh.z < -KILL && (sh._maxD === undefined || sh._maxD < 0 || camZ - sh.z < -KILL*6)){                    // passed behind us → recycle into the depths, keeping the spacing
+      const ns = rollSheet(sh.slot, sh.gen+1, 0); ns.z = sh.z - (NEAR0 + R + KILL); ns.lat = TAN*(camZ - ns.z); sheets[i] = ns;
+    }
+  }
+}
+
+// Build one ribbon with view-dependent adaptive tessellation.
+//  1. Probe: trace the centreline at PROBE uniform arc-length samples (heading integration → loops are possible).
+//  2. Score every probe interval by on-screen size (pixels spanned by centre and both edges) and by how fast
+//     the surface normal turns (folds, edge-on twists). Off-screen / behind-camera intervals get ~nothing.
+//  3. Place mesh columns at equal shares of that score (inverse CDF), positions via cubic Hermite between probes.
+//  4. Rows across the width scale with the on-screen sag of the curl and with the normal spread.
+const PROBE = 384, NU_FLOOR = 0.25, NU_MIN = 112, NU_MAX = 2048, NV_MIN = 4, NV_MAX = 48;
+const probePool = [], VQ = new Float64Array(9);
+function getProbe(k){
+  if(!probePool[k]){ const f = () => new Float64Array(PROBE+1);
+    probePool[k] = {x:f(), y:f(), z:f(), yw:f(), pt:f(), cum:f(), ex:f(), tp:f(),
+      tx:f(), ty:f(), tz:f(), ax:f(), ay:f(), az:f(), nx:f(), ny:f(), nz:f()}; }
+  return probePool[k];
+}
+function sheetFns(sh, aspect){
+  const vy = sheetVariety(sh);
+  const wl = S.wavelength, ft = FT*vy.tempo + vy.tPh, mt = T * S.morph;
+  const a0 = S.angle*Math.PI/180 + sh.yawJ;
+  let tg = sh.ang + Math.PI/2, sign = 1;
+  if(Math.cos(tg - a0) < 0){ tg += Math.PI; sign = -1; }
+  const hx = Math.cos(a0)*(1-S.swirl) + Math.cos(tg)*S.swirl, hy = Math.sin(a0)*(1-S.swirl) + Math.sin(tg)*S.swirl;
+  const yaw0 = Math.atan2(hy, hx);
+  const curvature = S.bend*sh.curv*0.7*(1 + 0.3*Math.sin(T*0.05 + sh.cPh)) + S.swirl*sign*0.5/Math.max(sh.rad, 0.8);
+  const ph1 = sh.p1 + 0.6*Math.sin(mt*0.04 + sh.p1), thM = 0.25*S.morph*Math.sin(T*0.07 + sh.tp);
+  return {
+    L: S.length * sh.len * (2.4*aspect + 2.5),
+    hw: 0.3*S.width*sh.w, curl: S.curl*sh.curl, sc: sh.sc,
+    ax: Math.cos(sh.ang)*sh.rad*S.spread*sh.lat, ay: Math.sin(sh.ang)*sh.rad*S.spread*sh.lat, az: sh.z - camZ,
+    R: sheetRotation(sh, new Float64Array(9)),
+    yaw: s => yaw0 + curvature*s + S.bend*0.45*(sh.b1*Math.sin(sh.k1/wl*s + ph1 - ft) + sh.b2*Math.sin(sh.k2/wl*s + sh.p2 - ft*0.63)),
+    pit: s => sh.pa*Math.sin(sh.kp/wl*s + sh.pp - ft*0.8),
+    th:  s => sh.t0 + S.twist*sh.ta*Math.sin(sh.kt/wl*s + sh.tp - ft*0.71) + thM,
+    // heading, pitch, twist and their exact derivatives along the ribbon, in one pass
+    ev: s => {
+      const B = S.bend*0.45, k1 = sh.k1/wl, k2 = sh.k2/wl, kp = sh.kp/wl, kt = sh.kt/wl;
+      const a1 = k1*s + ph1 - ft, a2 = k2*s + sh.p2 - ft*0.63, ap = kp*s + sh.pp - ft*0.8, at = kt*s + sh.tp - ft*0.71;
+      const s1 = Math.sin(a1), c1 = Math.cos(a1), s2 = Math.sin(a2), c2 = Math.cos(a2);
+      EV.yaw = yaw0 + curvature*s + B*(sh.b1*s1 + sh.b2*s2);
+      EV.dyaw = curvature + B*(sh.b1*k1*c1 + sh.b2*k2*c2);
+      EV.pit = sh.pa*Math.sin(ap); EV.dpit = sh.pa*kp*Math.cos(ap);
+      const tw = S.twist*sh.ta;
+      EV.th = sh.t0 + tw*Math.sin(at) + thM; EV.dth = tw*kt*Math.cos(at);
+      return EV;
+    },
+  };
+}
+const EV = {yaw:0, dyaw:0, pit:0, dpit:0, th:0, dth:0};
+// Frame at s plus its exact rate of change: with T=(cp·cy, cp·sy, sp), W=(-sy, cy, 0), F=(-sp·cy, -sp·sy, cp),
+// a = cθW + sθF, n = -sθW + cθF  →  a'·T = -cθ·y'·cp - sθ·p',  n'·T = sθ·y'·cp - cθ·p',  a'·n = θ' + y'·sp.
+function columnFrame(F, s){
+  const e = F.ev(s), f = frameAt(e.yaw, e.pit, e.th);
+  const cp = Math.cos(e.pit), sp = f.tz, ct = Math.cos(e.th), st = Math.sin(e.th);
+  const ka = -ct*e.dyaw*cp - st*e.dpit, kn = st*e.dyaw*cp - ct*e.dpit;
+  TP.ka = ka; TP.kn = kn; TP.tau = e.dth + e.dyaw*sp;
+  TP.t = foldTaper(ka, kn, F.hw, F.curl);
+  return f;
+}
+// Local frame at a point: tangent from yaw/pitch, W in the screen plane, across/normal rotated by twist θ.
+const FR = {tx:0,ty:0,tz:0, crx:0,cry:0,crz:0, nx:0,ny:0,nz:0};
+function frameAt(yw, pt, th){
+  const cp = Math.cos(pt), tx = cp*Math.cos(yw), ty = cp*Math.sin(yw), tz = Math.sin(pt);
+  const l = Math.hypot(tx, ty) || 1, wx = -ty/l, wy = tx/l;
+  const fx = -tz*wy, fy = tz*wx, fz = tx*wy - ty*wx;
+  const ct = Math.cos(th), st = Math.sin(th);
+  FR.tx = tx; FR.ty = ty; FR.tz = tz;
+  FR.crx = ct*wx + st*fx; FR.cry = ct*wy + st*fy; FR.crz = st*fz;
+  FR.nx = -st*wx + ct*fx; FR.ny = -st*wy + ct*fy; FR.nz = ct*fz;
+  return FR;
+}
+
+// Fold guard: a ribbon cannot bend tighter than its own half-width without turning inside out.
+// The edge at offset `off` stretches by (1 + a'·T·off + n'·T·k); where that would approach zero, narrow the sheet.
+const TP = {t:1, dax:0,day:0,daz:0, dbx:0,dby:0,dbz:0, ka:0, kn:0, tau:0};
+function taperAt(F, s){
+  const e = F.L*1e-4;
+  frameAt(F.yaw(s+e), F.pit(s+e), F.th(s+e));
+  const a1x=FR.crx,a1y=FR.cry,a1z=FR.crz, b1x=FR.nx,b1y=FR.ny,b1z=FR.nz;
+  frameAt(F.yaw(s-e), F.pit(s-e), F.th(s-e));
+  TP.dax=(a1x-FR.crx)/(2*e); TP.day=(a1y-FR.cry)/(2*e); TP.daz=(a1z-FR.crz)/(2*e);
+  TP.dbx=(b1x-FR.nx)/(2*e);  TP.dby=(b1y-FR.ny)/(2*e);  TP.dbz=(b1z-FR.nz)/(2*e);
+  const f = frameAt(F.yaw(s), F.pit(s), F.th(s));
+  const ka = TP.dax*f.tx + TP.day*f.ty + TP.daz*f.tz, kn = TP.dbx*f.tx + TP.dby*f.ty + TP.dbz*f.tz;
+  TP.t = foldTaper(ka, kn, F.hw, F.curl);
+  TP.ka = ka; TP.kn = kn; TP.tau = TP.dax*f.nx + TP.day*f.ny + TP.daz*f.nz;
+  return f;                               // FR now holds the frame at s
+}
+function foldTaper(ka, kn, hw, cu){
+  // How strongly the cross-section would be compressed at v (positive = towards folding through itself).
+  // Measured at 9 fixed points across the width and combined with a high-power mean: a smooth, continuous
+  // stand-in for the maximum. (Picking out the parabola's peak only when it lies inside the sheet made the
+  // estimate jump as the peak crossed an edge, which showed up as steps in the sheet's edge.)
+  let sum = 0;
+  for(let i=0;i<9;i++){
+    const v = i/4 - 1, x = Math.max(0, -(ka*v + kn*cu*(v*v - 0.333))*hw);
+    const x2 = x*x, x4 = x2*x2; sum += x4*x4;
+  }
+  const m = Math.sqrt(Math.sqrt(Math.sqrt(sum/9))) * 1.2;   // ≈ the largest compression
+  const g = m / 0.65, g2 = g*g;
+  return 1 / Math.sqrt(Math.sqrt(1 + g2*g2));                  // ≈1 for gentle bends, → 0.65/m for tight ones
+}
+
+function planSheet(sh, k, aspect, W, H, targetPx){
+  const F = sheetFns(sh, aspect), P = getProbe(k), n = PROBE, ds = F.L/n, mid = n/2;
+  for(let i=0;i<=n;i++){ const s = (i/n - 0.5)*F.L; P.yw[i] = F.yaw(s); P.pt[i] = F.pit(s); }
+  P.x[mid] = 0; P.y[mid] = 0; P.z[mid] = 0;
+  for(let i=mid;i<n;i++){ const y = (P.yw[i]+P.yw[i+1])/2, p = (P.pt[i]+P.pt[i+1])/2, c = Math.cos(p);
+    P.x[i+1] = P.x[i] + c*Math.cos(y)*ds; P.y[i+1] = P.y[i] + c*Math.sin(y)*ds; P.z[i+1] = P.z[i] + Math.sin(p)*ds; }
+  for(let i=mid;i>0;i--){ const y = (P.yw[i]+P.yw[i-1])/2, p = (P.pt[i]+P.pt[i-1])/2, c = Math.cos(p);
+    P.x[i-1] = P.x[i] - c*Math.cos(y)*ds; P.y[i-1] = P.y[i] - c*Math.sin(y)*ds; P.z[i-1] = P.z[i] - Math.sin(p)*ds; }
+
+  // frames at every probe, then the fold-guard taper from neighbouring probes (no extra evaluations)
+  for(let i=0;i<=n;i++){
+    const f = frameAt(P.yw[i], P.pt[i], F.th((i/n - 0.5)*F.L));
+    P.tx[i]=f.tx; P.ty[i]=f.ty; P.tz[i]=f.tz; P.ax[i]=f.crx; P.ay[i]=f.cry; P.az[i]=f.crz; P.nx[i]=f.nx; P.ny[i]=f.ny; P.nz[i]=f.nz;
+  }
+  for(let i=0;i<=n;i++){
+    const i0 = Math.max(0,i-1), i1 = Math.min(n,i+1), d = (i1-i0)*ds;
+    const ka = ((P.ax[i1]-P.ax[i0])*P.tx[i] + (P.ay[i1]-P.ay[i0])*P.ty[i] + (P.az[i1]-P.az[i0])*P.tz[i])/d;
+    const kn = ((P.nx[i1]-P.nx[i0])*P.tx[i] + (P.ny[i1]-P.ny[i0])*P.ty[i] + (P.nz[i1]-P.nz[i0])*P.tz[i])/d;
+    P.tp[i] = foldTaper(ka, kn, F.hw, F.curl);
+  }
+  // importance per interval
+  const K = CAM_D*H/2, sc = F.sc, hw = F.hw, cu = F.curl;
+  const R = F.R, V = VIEW, bx = W/2*1.15, by = H/2*1.15;
+  // camera-relative world point of local offset (lx,ly,lz) from the sheet middle, then into view space
+  const toView = (lx, ly, lz, m) => {
+    const wx = F.ax + R[0]*lx + R[1]*ly + R[2]*lz, wy = F.ay + R[3]*lx + R[4]*ly + R[5]*lz, wz = F.az + R[6]*lx + R[7]*ly + R[8]*lz;
+    VQ[m*3]   = V[0]*wx + V[1]*wy + V[2]*wz;
+    VQ[m*3+1] = V[3]*wx + V[4]*wy + V[5]*wz;
+    VQ[m*3+2] = V[6]*wx + V[7]*wy + V[8]*wz;
+  };
+  let pnx=0,pny=0,pnz=0, prevFront=0;
+  let maxSag = 0, maxWid = 0, maxD = -Infinity;
+  const pts = new Float64Array(6), prev = new Float64Array(6), pdir = new Float64Array(6);
+  // edges turning on screen need columns no matter how low the detail setting is (≈ one column per 2–3°)
+  const turnStep = 0.035 * Math.sqrt(targetPx / 8);
+  P.cum[0] = 0;
+  for(let i=0;i<=n;i++){
+    const tw = P.tp[i]*hw*sc, fnx = P.nx[i], fny = P.ny[i], fnz = P.nz[i];
+    const cx = P.x[i]*sc, cy = P.y[i]*sc, cz = P.z[i]*sc;
+    const ex = P.ax[i]*tw, ey = P.ay[i]*tw, ez = P.az[i]*tw;
+    const kx = fnx*cu*tw, ky = fny*cu*tw, kz = fnz*cu*tw;
+    // centre (v=0) and both edges (v=±1): local → rotated world → view → pixels
+    toView(cx - 0.333*kx, cy - 0.333*ky, cz - 0.333*kz, 0);
+    toView(cx + ex + 0.667*kx, cy + ey + 0.667*ky, cz + ez + 0.667*kz, 1);
+    toView(cx - ex + 0.667*kx, cy - ey + 0.667*ky, cz - ez + 0.667*kz, 2);
+    let front = 0, minZ = Infinity;
+    for(let m=0;m<3;m++){
+      const z = -VQ[m*3+2];
+      if(z >= 0.05){ front++; minZ = Math.min(minZ, z); }
+      if(z > maxD) maxD = z;
+      const zc = Math.max(z, 0.05);
+      pts[m*2] = K*VQ[m*3]/zc; pts[m*2+1] = K*VQ[m*3+1]/zc;
+    }
+    let need = 0;      // extra detail on top of the guaranteed floor (NU_FLOOR per probe interval)
+    if(i > 0){
+      const fr = front + prevFront;
+      if(fr === 6){
+        // fully in front: visible if the stretch's screen footprint overlaps the view
+        let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+        for(let m=0;m<6;m+=2){ x0 = Math.min(x0, pts[m], prev[m]); x1 = Math.max(x1, pts[m], prev[m]);
+                                y0 = Math.min(y0, pts[m+1], prev[m+1]); y1 = Math.max(y1, pts[m+1], prev[m+1]); }
+        if(x1 > -bx && x0 < bx && y1 > -by && y0 < by){
+          const la = Math.hypot(pts[0]-prev[0], pts[1]-prev[1]), lb = Math.hypot(pts[2]-prev[2], pts[3]-prev[3]), lc = Math.hypot(pts[4]-prev[4], pts[5]-prev[5]);
+          const dn = Math.acos(clamp(fnx*pnx + fny*pny + fnz*pnz, -1, 1));
+          // how sharply the centre line and both edges turn on screen between this interval and the last
+          let turn = 0;
+          for(let m=0;m<6;m+=2){
+            const dx = pts[m]-prev[m], dy = pts[m+1]-prev[m+1], l = Math.hypot(dx, dy);
+            if(l > 0.05){
+              if(pdir[m] !== 0 || pdir[m+1] !== 0) turn = Math.max(turn, Math.acos(clamp((dx*pdir[m] + dy*pdir[m+1])/l, -1, 1)));
+              pdir[m] = dx/l; pdir[m+1] = dy/l;
+            }
+          }
+          need += Math.min(64, Math.max(la, lb, lc)/targetPx + dn/0.05 + turn/turnStep);
+        }
+      } else if(fr > 0){
+        need += 48;                                   // crosses the camera plane: right at the lens, needs full detail
+      }
+    }
+    if(front > 0 && front < 3) maxSag = Infinity;      // crossing the camera plane: full rows
+    if(front > 0){
+      const z = Math.max(minZ, 0.3);
+      const vis = front < 3 || (Math.max(Math.abs(pts[0]),Math.abs(pts[2]),Math.abs(pts[4])) < bx*4 && Math.max(Math.abs(pts[1]),Math.abs(pts[3]),Math.abs(pts[5])) < by*4);
+      if(vis){
+        maxSag = Math.max(maxSag, Math.abs(cu)*hw*sc*K/z);
+        maxWid = Math.max(maxWid, front < 3 ? 4*Math.max(W,H) : Math.hypot(pts[2]-pts[4], pts[3]-pts[5]));
+      }
+    }
+    P.ex[i] = need;
+    prev.set(pts); pnx = fnx; pny = fny; pnz = fnz; prevFront = front;
+  }
+  // temporal stability: need rises at once but decays slowly, so columns don't slide back and forth
+  if(!(sh._ex instanceof Float64Array)) sh._ex = new Float64Array(n+1);
+  const E = sh._ex, decay = Math.exp(-0.9*frameDt); P.cum[0] = 0;
+  for(let i=0;i<=n;i++){ const v = Math.max(P.ex[i], E[i]*decay); E[i] = v; P.ex[i] = v; if(i > 0) P.cum[i] = P.cum[i-1] + NU_FLOOR + v; }
+  let nu = clamp(Math.ceil(P.cum[n]/8)*8, NU_MIN, NU_MAX);
+  let nv = clamp(Math.ceil(Math.sqrt(maxSag/0.25)/2)*2, NV_MIN, NV_MAX);   // rows only shape the curl; shading is per pixel
+  sh._maxD = maxD;                                   // front-most depth of any part (for safe recycling)
+  // hysteresis: keep the previous grid size unless the need changed noticeably (stops frame-to-frame reshuffling)
+  // growth is immediate; shrinking is gradual (≤10 % columns, ≤2 rows per frame), so a momentary
+  // dip in measured need can never make a visible sheet pop to a coarse mesh for a frame
+  if(sh._nu){ if(nu <= sh._nu*1.2 && nu >= sh._nu*0.8) nu = sh._nu; else if(nu < sh._nu) nu = Math.max(nu, Math.floor(sh._nu*0.9/8)*8); }
+  if(sh._nv){ if(nv <= sh._nv + 2 && nv >= sh._nv - 4) nv = sh._nv; else if(nv < sh._nv) nv = sh._nv - 2; }
+  sh._nu = nu; sh._nv = nv;
+  return {F, P, nu, nv};
+}
+
+function writeColumns(plan, base){
+  const {F, P} = plan, nu = plan.nu, n = PROBE, D = mesh.data, R = F.R;
+  // Rebuild the column distribution for the final column count: every probe interval keeps its floor share
+  // (so hidden stretches never collapse into a bridge across the view); only the extra detail is scaled.
+  let extra = 0; for(let i=1;i<=n;i++) extra += P.ex[i];
+  const fl = Math.min(NU_FLOOR, nu/n), fx = extra > 0 ? Math.max(0, nu - fl*n)/extra : 0;
+  P.cum[0] = 0; for(let i=1;i<=n;i++) P.cum[i] = P.cum[i-1] + fl + P.ex[i]*fx;
+  const ds = F.L/n, total = P.cum[n] || 1, sc = F.sc, hw = F.hw;
+  let j = 0;
+  for(let c=0;c<=nu;c++){
+    const target = c/nu*total;
+    while(j < n-1 && P.cum[j+1] < target) j++;
+    const span = P.cum[j+1] - P.cum[j];
+    const t = span > 0 ? clamp((target - P.cum[j])/span, 0, 1) : 0;
+    const s = ((j + t)/n - 0.5)*F.L;
+    // cubic Hermite between probes j and j+1, tangents from the analytic heading
+    const c0 = Math.cos(P.pt[j]), c1 = Math.cos(P.pt[j+1]);
+    const m0x = c0*Math.cos(P.yw[j])*ds,   m0y = c0*Math.sin(P.yw[j])*ds,   m0z = Math.sin(P.pt[j])*ds;
+    const m1x = c1*Math.cos(P.yw[j+1])*ds, m1y = c1*Math.sin(P.yw[j+1])*ds, m1z = Math.sin(P.pt[j+1])*ds;
+    const t2 = t*t, t3 = t2*t, h00 = 2*t3-3*t2+1, h10 = t3-2*t2+t, h01 = -2*t3+3*t2, h11 = t3-t2;
+    const px = (h00*P.x[j] + h10*m0x + h01*P.x[j+1] + h11*m1x)*sc;
+    const py = (h00*P.y[j] + h10*m0y + h01*P.y[j+1] + h11*m1y)*sc;
+    const pz = (h00*P.z[j] + h10*m0z + h01*P.z[j+1] + h11*m1z)*sc;
+    // frame, its derivatives along s (for exact normals) and the fold-guard width factor
+    const f = columnFrame(F, s);
+    const thw = TP.t*hw, u = s/(F.L/2);
+    const Cx = F.ax + R[0]*px + R[1]*py + R[2]*pz, Cy = F.ay + R[3]*px + R[4]*py + R[5]*pz, Cz = F.az + R[6]*px + R[7]*py + R[8]*pz;
+    const Tx = R[0]*f.tx + R[1]*f.ty + R[2]*f.tz, Ty = R[3]*f.tx + R[4]*f.ty + R[5]*f.tz, Tz = R[6]*f.tx + R[7]*f.ty + R[8]*f.tz;
+    const Ax = R[0]*f.crx + R[1]*f.cry + R[2]*f.crz, Ay = R[3]*f.crx + R[4]*f.cry + R[5]*f.crz, Az = R[6]*f.crx + R[7]*f.cry + R[8]*f.crz;
+    for(let side=0; side<2; side++){
+      const o = (base + c*2 + side)*STRIDE;
+      D[o] = Cx; D[o+1] = Cy; D[o+2] = Cz; D[o+3] = u;
+      D[o+4] = Tx; D[o+5] = Ty; D[o+6] = Tz; D[o+7] = thw;
+      D[o+8] = Ax; D[o+9] = Ay; D[o+10] = Az; D[o+11] = side;
+      D[o+12] = TP.ka; D[o+13] = TP.kn; D[o+14] = TP.tau; D[o+15] = 0;
+    }
+  }
+}
+
+// ---------- Camera ----------
+function perspective(aspect){
+  const f = CAM_D, near = 0.05, far = 200, nf = 1/(near-far);
+  const m = new Float32Array(16);
+  m[0] = f/aspect; m[5] = f; m[10] = (far+near)*nf; m[11] = -1; m[14] = 2*far*near*nf;
+  return m;
+}
+// Camera orientation: roll plus a slow, gentle wander of heading and pitch. VIEW holds its inverse (rows).
+const VIEW = new Float64Array([1,0,0, 0,1,0, 0,0,1]);
+function updateView(){
+  const w = S.wander;
+  const yaw = w*(0.32*Math.sin(T*0.11 + 0.7) + 0.14*Math.sin(T*0.047 + 2.1));
+  const pit = w*(0.22*Math.sin(T*0.083 + 1.9) + 0.10*Math.sin(T*0.031 + 4.0));
+  const cr = Math.cos(-roll), sr = Math.sin(-roll), cp = Math.cos(-pit), sp = Math.sin(-pit), cy = Math.cos(-yaw), sy = Math.sin(-yaw);
+  // V = Rz(-roll) · Rx(-pitch) · Ry(-yaw)
+  const a = [cy,0,sy, 0,1,0, -sy,0,cy];                 // Ry
+  const b = [1,0,0, 0,cp,-sp, 0,sp,cp];                 // Rx
+  const ba = [0,0,0,0,0,0,0,0,0];
+  for(let i=0;i<3;i++) for(let j=0;j<3;j++) ba[i*3+j] = b[i*3]*a[j] + b[i*3+1]*a[3+j] + b[i*3+2]*a[6+j];
+  const c = [cr,-sr,0, sr,cr,0, 0,0,1];                 // Rz
+  for(let i=0;i<3;i++) for(let j=0;j<3;j++) VIEW[i*3+j] = c[i*3]*ba[j] + c[i*3+1]*ba[3+j] + c[i*3+2]*ba[6+j];
+}
+function viewMatrix4(){
+  const V = VIEW, m = new Float32Array(16);      // column-major for GL
+  m[0] = V[0]; m[4] = V[1]; m[8]  = V[2];
+  m[1] = V[3]; m[5] = V[4]; m[9]  = V[5];
+  m[2] = V[6]; m[6] = V[7]; m[10] = V[8]; m[15] = 1;
+  return m;
+}
+
+// ---------- Sizing ----------
+let autoScale = 1;
+function targetSize(){
+  if(S.fixedSize) return [S.capW|0, S.capH|0];
+  const dpr = Math.min(window.devicePixelRatio || 1, S.maxDpr);
+  const k = dpr * S.renderScale * (S.autoQuality ? autoScale : 1);
+  return [Math.max(1, Math.round(innerWidth*k)), Math.max(1, Math.round(innerHeight*k))];
+}
+function maxDims(){
+  const vp = gl.getParameter(gl.MAX_VIEWPORT_DIMS), rb = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE);
+  return [Math.min(vp[0], rb), Math.min(vp[1], rb)];
+}
+function applySize(w, h){
+  const [mw, mh] = maxDims();
+  w = Math.min(w, mw); h = Math.min(h, mh);
+  if(canvas.width !== w || canvas.height !== h){ canvas.width = w; canvas.height = h; }
+  let cw = innerWidth, ch = innerHeight, l = 0, t = 0;
+  if(S.fixedSize){
+    const s = Math.min(innerWidth / w, innerHeight / h);
+    cw = w*s; ch = h*s; l = (innerWidth-cw)/2; t = (innerHeight-ch)/2;
+  }
+  canvas.style.width = cw+'px'; canvas.style.height = ch+'px';
+  canvas.style.left = l+'px'; canvas.style.top = t+'px';
+}
+
+// ---------- Render ----------
+let T = 0, FT = 0, frameDt = 1/60;
+function setSky(u, W, H){
+  gl.uniform3fv(u.uTop, hex2rgb(S.bgTop)); gl.uniform3fv(u.uBot, hex2rgb(S.bgBottom));
+  gl.uniform3fv(u.uGlow, hex2rgb(S.glow)); gl.uniform1f(u.uGlowAmt, S.glowAmt);
+  gl.uniform1f(u.uVig, S.vignette); gl.uniform2f(u.uRes, W, H);
+}
+function render(){
+  const W = canvas.width, H = canvas.height, aspect = W/H;
+  gl.viewport(0, 0, W, H);
+  gl.disable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE);
+
+  // background
+  gl.disable(gl.BLEND);
+  gl.useProgram(bgProg.p);
+  for(let i=1;i<5;i++) gl.disableVertexAttribArray(i);
+  if(inst) inst.vertexAttribDivisorANGLE(4, 0);
+  gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  const bu = bgProg.u;
+  setSky(bu, W, H);
+  gl.uniform1f(bu.uGrain, S.grain); gl.uniform1f(bu.uT, T);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+  // sheets: far → near
+  updateView();
+  const order = sheets.slice().sort((a,b) => a.z - b.z);
+  // aim: one mesh segment per ~8 px; ignores auto-quality resolution changes so the mesh stays stable
+  const targetPx = 8 / S.detail * ((S.autoQuality && !S.fixedSize && !snapshotting) ? autoScale : 1);
+  const budget = 180000 * S.detail * (snapshotting ? 6 : 1);
+  const plans = order.map((sh, k) => planSheet(sh, k, aspect, W, H, targetPx));
+  const count = () => plans.reduce((a, p) => a + (p.nu+1)*(p.nv+1), 0);
+  let total = count();
+  if(total > budget){ const f = budget/total; for(const p of plans) p.nu = clamp(Math.floor(p.nu*f/8)*8, NU_MIN, NU_MAX); total = count(); }
+  ensureCap(plans.reduce((a, p) => a + 2*(p.nu+1), 0));
+  const draws = []; let base = 0;
+  for(const p of plans){ writeColumns(p, base); draws.push([base, p.nu, p.nv, p.F.curl, p.F.sc]); base += 2*(p.nu+1); }
+  lastVerts = total;
+  gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vb);
+  gl.bufferData(gl.ARRAY_BUFFER, mesh.data.subarray(0, base*STRIDE), gl.DYNAMIC_DRAW);
+
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);   // premultiplied: alpha=0 → pure additive
+  gl.useProgram(shProg.p);
+  const u = shProg.u;
+  gl.uniformMatrix4fv(u.uProj, false, perspective(aspect));
+  gl.uniformMatrix4fv(u.uView, false, viewMatrix4());
+  gl.uniform4f(u.uFade, NEAR0, NEAR0 + depthRange(), S.nearFade, S.haze);
+  gl.uniform3fv(u.uTint, hex2rgb(S.tint)); gl.uniform3fv(u.uHi, hex2rgb(S.highlight));
+  gl.uniform4f(u.uLook, S.opacity, S.fresnel, S.gloss, S.shininess);
+  gl.uniform4f(u.uLook2, S.edgeLine, S.grain, S.falloff, S.farTint);
+  gl.uniform1f(u.uSoft, S.softness); gl.uniform1f(u.uT, T);
+  setSky(u, W, H);
+  for(let i=0;i<5;i++) gl.enableVertexAttribArray(i);
+  if(!inst) return;
+  gl.bindBuffer(gl.ARRAY_BUFFER, mesh.rb);
+  gl.vertexAttribPointer(4, 1, gl.FLOAT, false, 4, 0);
+  inst.vertexAttribDivisorANGLE(4, 1);                 // row index advances per instance
+  gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vb);
+  for(const [b0, nu, nv, cu, sc] of draws){
+    gl.uniform3f(u.uSheet, nv, cu, sc);
+    gl.uniform1f(u.uCurl, cu);
+    const off = b0*STRIDE*4;
+    for(let a=0;a<4;a++) gl.vertexAttribPointer(a, 4, gl.FLOAT, false, STRIDE*4, off + a*16);
+    gl.uniform1f(u.uWire, 0);
+    inst.drawArraysInstancedANGLE(gl.TRIANGLE_STRIP, 0, 2*(nu+1), nv);
+    if(wire){ gl.uniform1f(u.uWire, 1); inst.drawArraysInstancedANGLE(gl.LINE_STRIP, 0, 2*(nu+1), nv); }
+  }
+  inst.vertexAttribDivisorANGLE(4, 0);
+}
+
+// ---------- Loop ----------
+let paused = false, last = performance.now(), fpsAcc = 0, fpsN = 0, fpsShow = false;
+let qAcc = 0, qN = 0;
+function frame(now){
+  const dt = Math.min(0.1, (now - last)/1000); last = now; frameDt = Math.max(dt, 1/240);
+  if(!paused){ updateDrift(dt); T += dt*S.speed; FT += dt*S.speed*S.flow; updateScene(dt); }
+  const [w, h] = targetSize(); applySize(w, h);
+  render();
+  fpsAcc += dt; fpsN++;
+  if(fpsAcc > 0.5){ if(fpsShow) $('#fps').textContent = `${Math.round(fpsN/fpsAcc)} fps · ${canvas.width}×${canvas.height} · ${(lastVerts/1000).toFixed(1)}k verts`; fpsAcc = 0; fpsN = 0; }
+  if(S.autoQuality && !S.fixedSize && !recorder){
+    qAcc += dt; qN++;
+    if(qAcc > 1.5){
+      const avg = qAcc/qN;
+      if(avg > 1/40 && autoScale > 0.4) autoScale = Math.max(0.4, autoScale*0.85);
+      else if(avg < 1/57 && autoScale < 1) autoScale = Math.min(1, autoScale*1.08);
+      qAcc = 0; qN = 0;
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+// ---------- Capture ----------
+function download(blob, name){
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+}
+function stamp(){ return new Date().toISOString().replace(/[:T]/g,'-').slice(0,19); }
+function snapshot(){
+  const [mw, mh] = maxDims();
+  let w = S.capW|0, h = S.capH|0;
+  if(w > mw || h > mh){ const k = Math.min(mw/w, mh/h); w = Math.floor(w*k); h = Math.floor(h*k); toast(`GPU limit: capped to ${w}×${h}`); }
+  const pw = canvas.width, ph = canvas.height;
+  canvas.width = w; canvas.height = h;
+  snapshotting = true; render(); snapshotting = false;
+  canvas.toBlob(b => { if(b){ download(b, `aqua-sheets-${w}x${h}-${stamp()}.png`); toast(`Saved ${w}×${h} PNG`); } else toast('Snapshot failed (out of memory?)'); }, 'image/png');
+  canvas.width = pw; canvas.height = ph;
+}
+let recorder = null, recChunks = [];
+function toggleRecord(){
+  if(recorder){ recorder.stop(); return; }
+  if(!window.MediaRecorder || !canvas.captureStream){ toast('Recording is not supported in this browser'); return; }
+  const types = ['video/mp4;codecs=avc1.640033','video/mp4','video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'];
+  const mime = types.find(t => MediaRecorder.isTypeSupported(t)) || '';
+  const px = canvas.width*canvas.height;
+  const bps = Math.min(120e6, Math.max(8e6, px * S.recFps * 0.12));
+  const stream = canvas.captureStream(S.recFps);
+  try{ recorder = new MediaRecorder(stream, mime ? {mimeType:mime, videoBitsPerSecond:bps} : {videoBitsPerSecond:bps}); }
+  catch(e){ toast('Could not start recorder: ' + e.message); recorder = null; return; }
+  recChunks = [];
+  recorder.ondataavailable = e => { if(e.data.size) recChunks.push(e.data); };
+  recorder.onstop = () => {
+    const type = recorder.mimeType || 'video/webm';
+    const ext = type.includes('mp4') ? 'mp4' : 'webm';
+    download(new Blob(recChunks, {type}), `aqua-sheets-${canvas.width}x${canvas.height}-${stamp()}.${ext}`);
+    recorder = null; updateRecBtn(); toast('Recording saved');
+  };
+  recorder.start(1000); updateRecBtn();
+  toast(`Recording ${canvas.width}×${canvas.height}${S.fixedSize ? '' : ' (tip: enable fixed size for exact resolution)'}`);
+}
+function updateRecBtn(){ const b = $('#recBtn'); if(b){ b.textContent = recorder ? '■ Stop' : '● Record'; b.classList.toggle('rec', !!recorder); } }
+
+// ---------- Control config: hard limits, slider ranges, drift ----------
+// Hard limits are the absolute bounds a typed value is clamped to; slider ranges are user-adjustable within them.
+const HARD = {
+  speed:[0,20], flow:[-10,10], bend:[0,10], wavelength:[0.05,20], twist:[0,10], morph:[0,10],
+  dive:[0,20], roll:[-360,360], swirl:[0,1], wander:[0,3], tumble:[0,4],
+  count:[1,32], width:[0.01,20], length:[0.05,10], spread:[0,10], depth:[0.1,20], angle:[-360,360], curl:[0,10],
+  opacity:[0,1], fresnel:[0,5], gloss:[0,10], shininess:[1,2000], edgeLine:[0,10], softness:[0.01,1],
+  haze:[0,1], farTint:[0,1], falloff:[0,1], nearFade:[0,10],
+  glowAmt:[0,5], vignette:[0,2],
+  renderScale:[0.1,4], maxDpr:[0.5,8], detail:[0.1,8], grain:[0,10],
+};
+const NO_DRIFT = new Set(['count','detail','renderScale','maxDpr','grain']);
+const SCHEMA_MAP = {};
+for(const [, items] of SCHEMA) for(const [key, label, type, min, max, step, scale] of items) SCHEMA_MAP[key] = {label, type, min, max, step, log: scale === 'log'};
+const canDrift = k => SCHEMA_MAP[k] && SCHEMA_MAP[k].type === 'range' && !NO_DRIFT.has(k);
+
+let UI = {};   // per-key overrides: {min, max, drift, rate}
+function cfg(k){
+  const s = SCHEMA_MAP[k], u = UI[k] || {};
+  return { min: u.min ?? s.min, max: u.max ?? s.max, drift: !!u.drift, rate: u.rate ?? 1 };
+}
+function setCfg(k, patch){
+  const u = Object.assign({}, UI[k], patch), s = SCHEMA_MAP[k];
+  if(u.min === s.min) delete u.min;
+  if(u.max === s.max) delete u.max;
+  if(!u.drift) delete u.drift;
+  if(u.rate === 1) delete u.rate;
+  if(Object.keys(u).length) UI[k] = u; else delete UI[k];
+}
+const hardClamp = (k, v) => HARD[k] ? clamp(v, HARD[k][0], HARD[k][1]) : v;
+
+// Drift: smooth, endless wandering inside the slider's range (sum of incommensurate sines).
+// Slider position (0..1) ↔ value; logarithmic sliders give fine control at the low end.
+function logLo(c){ return c.min > 0 ? c.min : Math.max(c.max*1e-3, 1e-6); }
+function toPos(k, v){
+  const c = cfg(k);
+  if(!SCHEMA_MAP[k].log) return c.max > c.min ? clamp((v - c.min)/(c.max - c.min), 0, 1) : 0;
+  const lo = logLo(c), hi = Math.max(c.max, lo*1.0001);
+  return v <= lo ? 0 : clamp(Math.log(v/lo)/Math.log(hi/lo), 0, 1);
+}
+function toVal(k, p){
+  const c = cfg(k);
+  if(!SCHEMA_MAP[k].log) return c.min + (c.max - c.min)*p;
+  const lo = logLo(c), hi = Math.max(c.max, lo*1.0001);
+  return p <= 0 && c.min <= 0 ? 0 : lo*Math.pow(hi/lo, p);
+}
+const rateToPos = r => Math.log(clamp(r, 0.02, 10)/0.02)/Math.log(500), posToRate = p => 0.02*Math.pow(500, p);
+const driftPhase = {}, driftPhase2 = {}, driftBlend = {}, driftFrom = {};
+function keyHash(k){ let h = 2166136261; for(const ch of k){ h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return (h>>>0)/4294967296; }
+// Drift sweeps the whole range back and forth (cosine easing at the ends, so it lingers briefly but never parks);
+// the tempo wobbles slowly so it doesn't feel mechanical.
+// near-triangular sweep with softly rounded turns (asin of a slightly damped sine)
+const DK = 0.97, DA = Math.asin(DK);
+function driftValue(k, phase){ return 0.5 + 0.5*Math.asin(DK*Math.sin(phase))/DA; }
+function startDrift(k){
+  // start the sweep exactly where the value is now, heading in a direction picked by the key
+  const p = toPos(k, S[k]), th = Math.asin(clamp(Math.sin(DA*(2*p - 1))/DK, -1, 1));
+  driftPhase[k] = keyHash(k) > 0.5 ? th : Math.PI - th;
+  driftPhase2[k] = keyHash(k)*6.283;
+  driftBlend[k] = 1; driftFrom[k] = S[k];
+}
+let driftUiAcc = 0;
+function updateDrift(dt){
+  let any = false;
+  for(const k in UI){
+    if(!UI[k].drift || !canDrift(k)) continue;
+    const c = cfg(k);
+    if(driftPhase[k] == null) startDrift(k);
+    driftPhase2[k] += dt * 0.037 * c.rate;
+    driftPhase[k] += dt * 0.1 * c.rate * (1 + 0.35*Math.sin(driftPhase2[k]));
+    driftBlend[k] = Math.min(1, (driftBlend[k] ?? 1) + dt/4);         // eases in after a range change
+    const target = toVal(k, driftValue(k, driftPhase[k]));
+    const b = smooth(0, 1, driftBlend[k]);
+    S[k] = (driftFrom[k] ?? target)*(1-b) + target*b;
+    any = true;
+  }
+  driftUiAcc += dt;
+  if(any && driftUiAcc > 0.1 && panel.classList.contains('open')){ driftUiAcc = 0; syncControls(true); }
+}
+
+// ---------- Settings persistence ----------
+function diffFromDefaults(o){
+  const d = {}; for(const k in DEFAULTS) if(o[k] !== DEFAULTS[k]) d[k] = typeof o[k] === 'number' ? +o[k].toFixed(4) : o[k];
+  if(Object.keys(UI).length) d._ui = JSON.parse(JSON.stringify(UI));
+  return d;
+}
+function sanitize(o){
+  const r = {}; if(!o || typeof o !== 'object') return r;
+  for(const k in DEFAULTS) if(k in o && typeof o[k] === typeof DEFAULTS[k]) r[k] = typeof o[k] === 'number' ? hardClamp(k, o[k]) : o[k];
+  if(o._ui && typeof o._ui === 'object'){
+    r._ui = {};
+    for(const k in o._ui){
+      if(!SCHEMA_MAP[k] || typeof o._ui[k] !== 'object') continue;
+      const s = o._ui[k], u = {};
+      if(typeof s.min === 'number') u.min = hardClamp(k, s.min);
+      if(typeof s.max === 'number') u.max = hardClamp(k, s.max);
+      if(s.drift === true && canDrift(k)) u.drift = true;
+      if(typeof s.rate === 'number') u.rate = clamp(s.rate, 0.02, 10);
+      r._ui[k] = u;
+    }
+  }
+  return r;
+}
+function customPresets(){ try{ return JSON.parse(lsGet('aquaSheets.presets') || '{}') || {}; }catch(e){ return {}; } }
+function saveCustomPresets(p){ lsSet('aquaSheets.presets', JSON.stringify(p)); }
+let saveTimer;
+function persist(){ clearTimeout(saveTimer); saveTimer = setTimeout(()=>lsSet('aquaSheets.last', JSON.stringify(diffFromDefaults(S))), 300); }
+
+function applySettings(partial, {regen=true}={}){
+  const {_ui, ...vals} = partial;
+  Object.assign(S, vals);
+  if(_ui){ UI = {}; for(const k in _ui) setCfg(k, _ui[k]); for(const k in UI) if(UI[k].drift) startDrift(k); }
+  if(!mesh) buildMesh();
+  if(regen) genSheets();
+  if(controls.speed) syncControls(); persist();
+}
+function loadPreset(name){
+  const p = sanitize(PRESETS[name] || customPresets()[name]);
+  if(!PRESETS[name] && !customPresets()[name]) return;
+  const keep = {renderScale:S.renderScale, maxDpr:S.maxDpr, autoQuality:S.autoQuality, detail:S.detail,
+    capW:S.capW, capH:S.capH, fixedSize:S.fixedSize, recFps:S.recFps};
+  // keep the user's slider ranges; drift settings come from the preset
+  const ui = {};
+  for(const k in UI){ const {min, max} = UI[k]; if(min != null || max != null) ui[k] = {min, max}; }
+  for(const k in (p._ui || {})) ui[k] = Object.assign(ui[k] || {}, p._ui[k]);
+  for(const k in ui){ for(const f in ui[k]) if(ui[k][f] == null) delete ui[k][f]; }
+  applySettings(Object.assign({}, DEFAULTS, keep, p, {_ui: ui}));
+}
+
+// ---------- Panel UI ----------
+const controls = {};
+const REGEN_KEYS = new Set(['seed','count']);
+function fmt(v, step){
+  if(step >= 1) return String(Math.round(v));
+  const a = Math.abs(v);
+  if(a > 0 && a < 0.1) return (+v).toPrecision(2);        // small values (log sliders) keep two significant digits
+  return (+v).toFixed(a >= 100 ? 1 : step < 0.01 ? 3 : 2);
+}
+const fmtRate = r => (r < 0.1 ? r.toPrecision(2) : r.toFixed(2)) + '×';
+
+function buildPanel(){
+  const root = $('#controls'); root.innerHTML = '';
+  // presets
+  const pd = document.createElement('details'); pd.open = true;
+  pd.innerHTML = `<summary>Presets</summary>
+    <select id="presetSel"></select>
+    <div class="btns">
+      <button class="b" id="pSave">Save as…</button>
+      <button class="b" id="pDel">Delete</button>
+      <button class="b" id="pRand">New seed</button>
+      <button class="b" id="pReset">Reset</button>
+    </div>
+    <div class="btns">
+      <button class="b" id="pLink">Copy link</button>
+      <button class="b" id="pExport">Copy settings</button>
+      <button class="b" id="pImport">Paste settings</button>
+    </div>
+    <p class="hint">“Copy settings” copies everything that differs from the built-in defaults, including slider ranges and drift.</p>`;
+  root.appendChild(pd);
+  fillPresetSelect();
+  $('#presetSel').onchange = e => { loadPreset(e.target.value); toast(e.target.value); };
+  $('#pSave').onclick = () => { const n = prompt('Preset name'); if(!n) return;
+    const c = customPresets(); c[n] = diffFromDefaults(S); saveCustomPresets(c); fillPresetSelect(n); toast('Saved “'+n+'”'); };
+  $('#pDel').onclick = () => { const n = $('#presetSel').value, c = customPresets();
+    if(!(n in c)){ toast('Built-in presets cannot be deleted'); return; } delete c[n]; saveCustomPresets(c); fillPresetSelect(); toast('Deleted'); };
+  $('#pRand').onclick = () => applySettings({seed: Math.floor(Math.random()*99999)});
+  $('#pReset').onclick = () => loadPreset('Aqua (Panther)');
+  $('#pLink').onclick = () => { const url = location.href.split('#')[0] + '#s=' + b64e(JSON.stringify(diffFromDefaults(S)));
+    history.replaceState(null, '', url); copy(url, 'Link copied'); };
+  $('#pExport').onclick = () => copy(JSON.stringify(diffFromDefaults(S)), 'Settings copied');
+  $('#pImport').onclick = () => { const t = prompt('Paste settings'); if(!t) return;
+    try{ const raw = JSON.parse(t), o = sanitize(raw); applySettings(Object.assign({}, DEFAULTS, o, {_ui: o._ui || {}}));
+      if(raw._state) restoreState(raw._state); else toast('Imported'); }catch(e){ toast('Invalid settings'); } };
+
+  for(const [group, items] of SCHEMA){
+    const d = document.createElement('details'); d.open = group === 'Motion' || group === 'Camera';
+    d.innerHTML = `<summary>${group}</summary>`;
+    for(const [key, label, type, min, max, step] of items){
+      const row = document.createElement('div'); row.className = 'row' + (type === 'check' ? ' check' : '');
+      const id = 'ctl_' + key;
+      let input;
+      if(type === 'range'){
+        row.innerHTML = `<label for="${id}">${label}</label><input type="range" id="${id}" min="0" max="1" step="0.0005">`
+          + `<input type="number" class="num" step="any" aria-label="${label} value">`
+          + `<button class="more" aria-label="${label} options" title="Range & drift">⋯</button>`
+          + `<div class="sub">
+               <div class="subrow"><span>Range</span><input type="number" class="rmin" step="any" aria-label="min"><span>–</span><input type="number" class="rmax" step="any" aria-label="max"><button class="b sm rreset" title="Reset range">↺</button></div>
+               ${canDrift(key) ? `<div class="subrow"><label class="dl"><input type="checkbox" class="dchk"> Drift</label><span>rate</span><input type="range" class="drate" min="0" max="1" step="0.001"><output class="drout"></output></div>` : ''}
+               <div class="hint">Hard limits ${HARD[key][0]} … ${HARD[key][1]}</div>
+             </div>`;
+        input = row.querySelector('input[type=range]');
+        const num = row.querySelector('.num');
+        input.oninput = () => {
+          if(cfg(key).drift){ setCfg(key, {drift:false}); toast(label + ': drift off'); }
+          let v = toVal(key, +input.value);
+          v = step >= 1 ? Math.round(v) : +v.toPrecision(4);
+          num.value = fmt(v, step);
+          applySettings({[key]: v}, {regen: REGEN_KEYS.has(key)});
+        };
+        num.onchange = () => {
+          let v = parseFloat(num.value); if(!isFinite(v)){ syncControls(); return; }
+          v = hardClamp(key, v); if(step >= 1) v = Math.round(v);
+          const c = cfg(key);
+          if(v < c.min) setCfg(key, {min: v}); if(v > c.max) setCfg(key, {max: v});
+          if(c.drift){ setCfg(key, {drift:false}); toast(label + ': drift off'); }
+          applySettings({[key]: v}, {regen: REGEN_KEYS.has(key)});
+        };
+        row.querySelector('.more').onclick = () => row.classList.toggle('open');
+        const rmin = row.querySelector('.rmin'), rmax = row.querySelector('.rmax');
+        const setRange = () => {
+          let a = parseFloat(rmin.value), b = parseFloat(rmax.value);
+          if(!isFinite(a) || !isFinite(b)){ syncControls(); return; }
+          a = hardClamp(key, a); b = hardClamp(key, b); if(a > b) [a, b] = [b, a];
+          if(a === b) b = a + (step || 0.01);
+          setCfg(key, {min: a, max: b});
+          if(cfg(key).drift){ driftBlend[key] = 0; driftFrom[key] = S[key]; }
+          applySettings({}, {regen:false});
+        };
+        rmin.onchange = setRange; rmax.onchange = setRange;
+        row.querySelector('.rreset').onclick = () => { setCfg(key, {min: min, max: max}); applySettings({}, {regen:false}); };
+        const dchk = row.querySelector('.dchk');
+        if(dchk){
+          dchk.onchange = () => { setCfg(key, {drift: dchk.checked}); if(dchk.checked) startDrift(key); applySettings({}, {regen:false}); };
+          const dr = row.querySelector('.drate');
+          dr.oninput = () => { const r = +posToRate(+dr.value).toPrecision(3); setCfg(key, {rate: r}); row.querySelector('.drout').textContent = fmtRate(r); persist(); };
+        }
+      } else if(type === 'int'){
+        row.innerHTML = `<label for="${id}">${label}</label><input type="number" id="${id}" min="${min}" max="${max}" step="1" class="wide">`;
+        input = row.querySelector('input');
+        input.oninput = () => { const v = clamp(Math.round(+input.value||0), min, max); applySettings({[key]: v}); };
+      } else if(type === 'color'){
+        row.innerHTML = `<label for="${id}">${label}</label><input type="color" id="${id}" class="wide">`;
+        input = row.querySelector('input');
+        input.oninput = () => applySettings({[key]: input.value}, {regen:false});
+      } else if(type === 'check'){
+        row.innerHTML = `<label for="${id}">${label}</label><input type="checkbox" id="${id}">`;
+        input = row.querySelector('input');
+        input.onchange = () => { if(key === 'autoQuality') autoScale = 1; applySettings({[key]: input.checked}, {regen:false}); };
+      }
+      controls[key] = {input, type, step, row};
+      d.appendChild(row);
+    }
+    root.appendChild(d);
+  }
+
+  // capture
+  const cd = document.createElement('details');
+  cd.innerHTML = `<summary>Capture</summary>
+    <div class="wh"><input type="number" id="capW" min="16" max="16384"><span>×</span><input type="number" id="capH" min="16" max="16384"></div>
+    <div class="btns">
+      <button class="b" data-wh="5120x3200">5K 16:10</button><button class="b" data-wh="5120x2880">5K 16:9</button>
+      <button class="b" data-wh="3840x2160">4K</button><button class="b" data-wh="1920x1080">1080p</button>
+    </div>
+    <div class="row check"><label for="fixedChk">Fixed render size (for recording)</label><input type="checkbox" id="fixedChk"></div>
+    <div class="row check"><label for="recFps">Record fps</label><select id="recFps" style="width:auto"><option>24</option><option>30</option><option>60</option></select></div>
+    <div class="btns"><button class="b" id="snapBtn">Snapshot PNG</button><button class="b" id="recBtn">● Record</button></div>
+    <p class="hint">Snapshots render one frame at the size above, even on small screens. Recording captures the live canvas, so turn on fixed size for exact 5K; whether 5K keeps up in real time depends on the GPU and the encoder.</p>`;
+  root.appendChild(cd);
+  const capW = $('#capW'), capH = $('#capH');
+  capW.oninput = () => applySettings({capW: clamp(+capW.value|0, 16, 16384)}, {regen:false});
+  capH.oninput = () => applySettings({capH: clamp(+capH.value|0, 16, 16384)}, {regen:false});
+  cd.querySelectorAll('[data-wh]').forEach(b => b.onclick = () => { const [w,h] = b.dataset.wh.split('x').map(Number); applySettings({capW:w, capH:h}, {regen:false}); });
+  $('#fixedChk').onchange = e => applySettings({fixedSize: e.target.checked}, {regen:false});
+  $('#recFps').onchange = e => applySettings({recFps: +e.target.value}, {regen:false});
+  $('#snapBtn').onclick = snapshot;
+  $('#recBtn').onclick = toggleRecord;
+
+  const kd = document.createElement('details');
+  kd.innerHTML = `<summary>Keys</summary><p class="hint">H panel · Space pause · F fullscreen · R new seed · S snapshot · P fps meter · W wireframe · C copy scene state (for bug reports)</p>`;
+  root.appendChild(kd);
+  syncControls();
+}
+function fillPresetSelect(sel){
+  const s = $('#presetSel'); if(!s) return;
+  const c = customPresets();
+  s.innerHTML = '<optgroup label="Built-in">' + Object.keys(PRESETS).map(n => `<option>${esc(n)}</option>`).join('') + '</optgroup>' +
+    (Object.keys(c).length ? '<optgroup label="Saved">' + Object.keys(c).map(n => `<option>${esc(n)}</option>`).join('') + '</optgroup>' : '');
+  if(sel) s.value = sel;
+}
+function esc(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function syncControls(driftOnly){
+  for(const k in controls){
+    const c = controls[k];
+    if(driftOnly && !(UI[k] && UI[k].drift)) continue;
+    if(c.type === 'check'){ c.input.checked = !!S[k]; continue; }
+    if(c.type === 'range'){
+      const g = cfg(k), row = c.row, num = row.querySelector('.num');
+      c.input.value = toPos(k, S[k]);
+      if(document.activeElement !== num) num.value = fmt(S[k], c.step);
+      row.classList.toggle('drifting', g.drift);
+      if(driftOnly) continue;
+      const rmin = row.querySelector('.rmin'), rmax = row.querySelector('.rmax');
+      if(document.activeElement !== rmin) rmin.value = g.min;
+      if(document.activeElement !== rmax) rmax.value = g.max;
+      const dchk = row.querySelector('.dchk');
+      if(dchk){ dchk.checked = g.drift; const dr = row.querySelector('.drate'); dr.value = rateToPos(g.rate); row.querySelector('.drout').textContent = fmtRate(g.rate); }
+      continue;
+    }
+    if(document.activeElement !== c.input) c.input.value = S[k];
+  }
+  if(driftOnly) return;
+  const w = $('#capW'); if(w && document.activeElement !== w) w.value = S.capW;
+  const h = $('#capH'); if(h && document.activeElement !== h) h.value = S.capH;
+  const f = $('#fixedChk'); if(f) f.checked = S.fixedSize;
+  const r = $('#recFps'); if(r) r.value = String(S.recFps);
+}
+function copy(text, msg){
+  (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject())
+    .then(() => toast(msg)).catch(() => { prompt('Copy:', text); });
+}
+
+function captureState(){
+  const r = x => x;
+  return {camZ: r(camZ), roll: r(roll), T: r(T), FT: r(FT), w: canvas.width, h: canvas.height,
+    sheets: sheets.map(sh => { const o = {}; for(const k in sh) if(k !== '_ex') o[k] = r(sh[k]); return o; })};
+}
+function restoreState(st){
+  camZ = st.camZ; roll = st.roll; T = st.T; FT = st.FT;
+  sheets = st.sheets.map(o => Object.assign({}, o));
+  paused = true; toast('Scene state restored (paused)');
+}
+
+// ---------- UI behaviour ----------
+const panel = $('#panel');
+function togglePanel(open){ panel.classList.toggle('open', open ?? !panel.classList.contains('open')); }
+$('#gear').onclick = () => togglePanel(true);
+$('#closePanel').onclick = () => togglePanel(false);
+let wakeTimer;
+function wake(){ document.body.classList.add('ui-awake'); document.body.classList.remove('hide-cursor');
+  clearTimeout(wakeTimer); wakeTimer = setTimeout(() => { document.body.classList.remove('ui-awake');
+    if(!panel.classList.contains('open')) document.body.classList.add('hide-cursor'); }, 2500); }
+addEventListener('pointermove', wake); addEventListener('pointerdown', wake);
+addEventListener('keydown', e => {
+  if(e.target.matches('input,select,textarea')) return;
+  const k = e.key.toLowerCase();
+  if(k === 'h') togglePanel();
+  else if(k === 'escape') togglePanel(false);
+  else if(k === ' '){ paused = !paused; toast(paused ? 'Paused' : 'Playing'); e.preventDefault(); }
+  else if(k === 'f'){ if(!document.fullscreenElement) document.documentElement.requestFullscreen?.(); else document.exitFullscreen?.(); }
+  else if(k === 'r') applySettings({seed: Math.floor(Math.random()*99999)});
+  else if(k === 's') snapshot();
+  else if(k === 'c'){ copy(JSON.stringify(Object.assign(diffFromDefaults(S), {_state: captureState()})), 'Scene state copied: paste it to Claude'); }
+  else if(k === 'w'){ wire = !wire; toast(wire ? 'Wireframe on' : 'Wireframe off'); }
+  else if(k === 'p'){ fpsShow = !fpsShow; $('#fps').style.display = fpsShow ? 'block' : 'none'; }
+});
+canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); toast('GPU context lost — reload the page'); });
+
+// ---------- Boot ----------
+(function boot(){
+  let init = {};
+  try{ init = sanitize(JSON.parse(lsGet('aquaSheets.last') || '{}')); }catch(e){}
+  const m = location.hash.match(/s=([^&]+)/);
+  if(m){ try{ init = sanitize(JSON.parse(b64d(m[1]))); }catch(e){} }
+  const {_ui, ...vals} = init;
+  Object.assign(S, vals);
+  for(const k in (_ui || {})) setCfg(k, _ui[k]);
+  buildMesh(); genSheets(); buildPanel();
+  if(new URLSearchParams(location.search).has('clean')) $('#gear').remove();   // ?clean for wallpaper/screensaver use
+  requestAnimationFrame(t => { last = t; requestAnimationFrame(frame); });
+})();
+</script>
+</body>
+</html>
