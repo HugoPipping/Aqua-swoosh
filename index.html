@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Aqua Sheets 1.0</title>
+<title>Aqua Swoosh</title>
 <meta name="description" content="Aqua Swoosh: the OS X Panther Aqua swooshes in slow motion. Soft, translucent 3D sheets drift and twist as you dive through them, in your browser, with presets and 5K capture.">
 <style>
   :root{
@@ -83,7 +83,7 @@
 <div id="fps"></div>
 <button id="gear" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
 <aside id="panel" aria-label="Settings panel">
-  <header><h1>Aqua Sheets</h1><button class="x" id="closePanel" aria-label="Close">✕</button></header>
+  <header><h1>Aqua Swoosh</h1><button class="x" id="closePanel" aria-label="Close">✕</button></header>
   <div id="controls"></div>
 </aside>
 <div id="toast"></div>
@@ -91,7 +91,7 @@
 <script>
 "use strict";
 /* ============================================================
-   Aqua Sheets — translucent undulating sheet engine (WebGL 1)
+   Aqua Swoosh — translucent undulating sheet engine (WebGL 1)
    Keys: H panel · Space pause · F fullscreen · R new seed · S snapshot · P fps
    ============================================================ */
 
@@ -829,7 +829,7 @@ function snapshot(){
   const pw = canvas.width, ph = canvas.height;
   canvas.width = w; canvas.height = h;
   snapshotting = true; render(); snapshotting = false;
-  canvas.toBlob(b => { if(b){ download(b, `aqua-sheets-${w}x${h}-${stamp()}.png`); toast(`Saved ${w}×${h} PNG`); } else toast('Snapshot failed (out of memory?)'); }, 'image/png');
+  canvas.toBlob(b => { if(b){ download(b, `aqua-swoosh-${w}x${h}-${stamp()}.png`); toast(`Saved ${w}×${h} PNG`); } else toast('Snapshot failed (out of memory?)'); }, 'image/png');
   canvas.width = pw; canvas.height = ph;
 }
 let recorder = null, recChunks = [];
@@ -848,7 +848,7 @@ function toggleRecord(){
   recorder.onstop = () => {
     const type = recorder.mimeType || 'video/webm';
     const ext = type.includes('mp4') ? 'mp4' : 'webm';
-    download(new Blob(recChunks, {type}), `aqua-sheets-${canvas.width}x${canvas.height}-${stamp()}.${ext}`);
+    download(new Blob(recChunks, {type}), `aqua-swoosh-${canvas.width}x${canvas.height}-${stamp()}.${ext}`);
     recorder = null; updateRecBtn(); toast('Recording saved');
   };
   recorder.start(1000); updateRecBtn();

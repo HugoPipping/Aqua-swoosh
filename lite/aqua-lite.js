@@ -1,4 +1,4 @@
-// Aqua Sheets Lite: the Aqua Sheets look at a fraction of the cost, for use as a background behind
+// Aqua Swoosh Lite: the Aqua Swoosh look at a fraction of the cost, for use as a background behind
 // something heavier (e.g. Downpane, the rain Easter egg).
 //
 // What makes it light:
@@ -156,9 +156,9 @@ void main(){
 export function createAquaLite(canvas, options = {}) {
 	const S = Object.assign({}, LITE_DEFAULTS, options);
 	const gl = canvas.getContext("webgl", { antialias: true, alpha: true, premultipliedAlpha: true, preserveDrawingBuffer: false, powerPreference: "low-power", depth: false, stencil: false });
-	if (!gl) throw new Error("Aqua Sheets Lite: WebGL is not available");
+	if (!gl) throw new Error("Aqua Swoosh Lite: WebGL is not available");
 	const inst = gl.getExtension("ANGLE_instanced_arrays");
-	if (!inst) throw new Error("Aqua Sheets Lite: instanced drawing (ANGLE_instanced_arrays) is not available");
+	if (!inst) throw new Error("Aqua Swoosh Lite: instanced drawing (ANGLE_instanced_arrays) is not available");
 	const hp = gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.HIGH_FLOAT);
 	const P = hp && hp.precision > 0 ? "highp" : "mediump";
 

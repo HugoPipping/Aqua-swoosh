@@ -1,4 +1,4 @@
-// mountAquaLite(container, options): puts Aqua Sheets Lite into an element as a background layer.
+// mountAquaLite(container, options): puts Aqua Swoosh Lite into an element as a background layer.
 //
 //   const sheets = mountAquaLite(document.body, { scale: 0.33, fps: 30, sky: false });
 //   sheets.set({ bgTop: "#8dbbec", bgBottom: "#0c3592" });   // any engine option, at any time
@@ -45,7 +45,7 @@ export function mountAquaLite(container, options = {}) {
 		w.postMessage({ type: "init", canvas: off, options: engine, fps, width, height, stats: onStats ? Math.max(1, Math.round(fps / 2)) : 0, paused: document.hidden }, [off]);
 		w.onmessage = (e) => {
 			if (e.data.type === "stats" && onStats) onStats({ ...e.data, thread: "worker" });
-			else if (e.data.type === "error") console.error("Aqua Sheets Lite (worker):", e.data.message);
+			else if (e.data.type === "error") console.error("Aqua Swoosh Lite (worker):", e.data.message);
 		};
 		api = {
 			set: (o) => { const { scale: s, fps: f, ...rest } = o; if (s != null) { state.scale = s; onResize(); } if (f != null) { state.fps = f; w.postMessage({ type: "fps", fps: f }); } if (Object.keys(rest).length) w.postMessage({ type: "set", options: rest }); },

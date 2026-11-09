@@ -1,4 +1,4 @@
-// Runs Aqua Sheets Lite on its own thread with an OffscreenCanvas, so the page's main thread
+// Runs Aqua Swoosh Lite on its own thread with an OffscreenCanvas, so the page's main thread
 // (and whatever simulation lives there) never spends time on it.
 import { createAquaLite } from "./aqua-lite.js";
 
