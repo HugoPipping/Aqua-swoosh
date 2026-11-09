@@ -15,9 +15,6 @@
 # The Matrix site's own deploy leaves aqua-swoosh/ alone. This one only ever
 # writes into an empty aqua-swoosh/ folder or one it made before (it holds an
 # .aqua-swoosh-site file), so a wrong path can't wipe anything else.
-#
-# Search engines are told not to list it for now: delete the X-Robots-Tag
-# lines below to make it public.
 
 name: Deploy
 
@@ -71,10 +68,6 @@ jobs:
           </Files>
           <IfModule mod_mime.c>
             AddType text/javascript .js
-          </IfModule>
-          # Not public yet: search engines shouldn't list it
-          <IfModule mod_headers.c>
-            Header set X-Robots-Tag "noindex, nofollow"
           </IfModule>
           HT
           ls -la site
