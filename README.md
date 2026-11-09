@@ -5,6 +5,9 @@ Soft, translucent 3D sheets undulate, twist and tumble slowly while the camera d
 through them, like diving into a calm whirlpool. Everything lives in a single, dependency-free
 `index.html` (WebGL 1) — open it in a browser, no build step.
 
+Online: https://matrixrain.dreamhosters.com/aqua-swoosh/ (and `lite.html` there for Lite mode).
+Every push to `main` uploads it; see `.github/workflows/deploy.yml`.
+
 ## Using it
 
 Move the mouse to reveal the ⚙ button, or press **H**, to open the control panel.

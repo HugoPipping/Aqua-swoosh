@@ -1,0 +1,114 @@
+# Uploads the site to <site>/aqua-swoosh/ on Dreamhost whenever main changes,
+# or when started by hand from the Actions tab:
+#   https://matrixrain.dreamhosters.com/aqua-swoosh/            the full engine
+#   https://matrixrain.dreamhosters.com/aqua-swoosh/lite.html   the Lite test page
+#
+# It does nothing until these repository secrets exist (Settings -> Secrets and
+# variables -> Actions -> Secrets). They are the same as the Matrix site's:
+#   DREAMHOST_HOST      the server, e.g. iad1-shared-b7-01.dreamhost.com
+#   DREAMHOST_USER      the SSH user that owns the site
+#   DREAMHOST_PATH      the site's folder in that user's home, e.g. matrixrain.dreamhosters.com
+#   and one of:
+#   DREAMHOST_PASSWORD  that user's password
+#   DREAMHOST_SSH_KEY   a private key whose public half is in that user's ~/.ssh/authorized_keys
+#
+# The Matrix site's own deploy leaves aqua-swoosh/ alone. This one only ever
+# writes into an empty aqua-swoosh/ folder or one it made before (it holds an
+# .aqua-swoosh-site file), so a wrong path can't wipe anything else.
+#
+# Search engines are told not to list it for now: delete the X-Robots-Tag
+# lines below to make it public.
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      DH_HOST: ${{ secrets.DREAMHOST_HOST }}
+      DH_USER: ${{ secrets.DREAMHOST_USER }}
+      DH_PATH: ${{ secrets.DREAMHOST_PATH }}
+      DH_KEY: ${{ secrets.DREAMHOST_SSH_KEY }}
+      # sshpass reads the password from SSHPASS, so it never appears on a command line
+      SSHPASS: ${{ secrets.DREAMHOST_PASSWORD }}
+    steps:
+      - name: Check it is set up
+        id: configured
+        run: |
+          if [ -z "$DH_HOST" ] || [ -z "$DH_USER" ] || [ -z "$DH_PATH" ] || { [ -z "$DH_KEY" ] && [ -z "$SSHPASS" ]; }; then
+            echo "Deploying is not configured: add the DREAMHOST_* secrets to switch it on. Nothing to do."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v6
+        if: steps.configured.outputs.ready == 'true'
+
+      - name: Gather the files
+        if: steps.configured.outputs.ready == 'true'
+        run: |
+          mkdir -p site
+          cp -r index.html lite.html lite LICENSE site/
+          touch site/.aqua-swoosh-site
+          cat > site/.htaccess <<'HT'
+          # Settings for Apache, which Dreamhost uses. The site is only files.
+          Options -Indexes
+          <Files ".aqua-swoosh-site">
+            Require all denied
+          </Files>
+          <IfModule mod_mime.c>
+            AddType text/javascript .js
+          </IfModule>
+          # Not public yet: search engines shouldn't list it
+          <IfModule mod_headers.c>
+            Header set X-Robots-Tag "noindex, nofollow"
+          </IfModule>
+          HT
+          ls -la site
+
+      - name: Set up SSH
+        if: steps.configured.outputs.ready == 'true'
+        run: |
+          install -m 700 -d ~/.ssh
+          ssh-keyscan -H "$DH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          if [ -n "$DH_KEY" ]; then
+            printf '%s\n' "$DH_KEY" > ~/.ssh/deploy_key
+            chmod 600 ~/.ssh/deploy_key
+            printf '#!/bin/sh\nexec ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes "$@"\n' > ~/.ssh/connect
+          else
+            sudo apt-get install -y -qq sshpass > /dev/null
+            printf '#!/bin/sh\nexec sshpass -e ssh -o PubkeyAuthentication=no -o PreferredAuthentications=password,keyboard-interactive "$@"\n' > ~/.ssh/connect
+          fi
+          chmod 700 ~/.ssh/connect
+
+      - name: Make sure the folder is this site's
+        if: steps.configured.outputs.ready == 'true'
+        run: |
+          ~/.ssh/connect "$DH_USER@$DH_HOST" 'bash -s' -- "$DH_PATH/aqua-swoosh" <<'SH'
+          target="$1"
+          mkdir -p "$target"
+          if [ -f "$target/.aqua-swoosh-site" ] || [ -z "$(ls -A "$target")" ]; then exit 0; fi
+          echo "$target has other files in it and no .aqua-swoosh-site, so nothing was uploaded." >&2
+          exit 1
+          SH
+
+      - name: Upload
+        if: steps.configured.outputs.ready == 'true'
+        run: |
+          rsync -az --delete \
+            -e "$HOME/.ssh/connect" \
+            site/ "$DH_USER@$DH_HOST:$DH_PATH/aqua-swoosh/"
+          echo "Uploaded to $DH_PATH/aqua-swoosh/" >> "$GITHUB_STEP_SUMMARY"
